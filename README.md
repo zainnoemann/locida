@@ -1,66 +1,172 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# LOCIDA
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+[![Laravel](https://img.shields.io/badge/Laravel-12.x-FF2D20?logo=laravel&logoColor=white)](https://laravel.com)
+[![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)](https://www.php.net)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 
-## About Laravel
+Laravel application with a Docker-first local development setup.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Quick links:
+[Quick Start](#quick-start) • [Default Admin](#default-admin) • [Services](#services) • [Daily Commands](#daily-commands) • [Troubleshooting](#troubleshooting)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Table Of Contents
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- [Overview](#overview)
+- [Services](#services)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Default Admin](#default-admin)
+- [Daily Commands](#daily-commands)
+- [Vite](#vite)
+- [Port Mapping](#port-mapping)
+- [Docker Files](#docker-files)
+- [Troubleshooting](#troubleshooting)
 
-## Learning Laravel
+## Overview
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+This repository includes a complete development environment using Docker Compose:
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- `app`: PHP-FPM container for Laravel
+- `nginx`: web server routing requests to PHP-FPM
+- `db`: PostgreSQL database
+- `redis`: Redis cache/session backend
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Services
 
-## Laravel Sponsors
+| Service | Image | Purpose | Host Port |
+| --- | --- | --- | --- |
+| `app` | `locida` | Runs Laravel | - |
+| `nginx` | `nginx:1.27-alpine` | HTTP server | `8080` |
+| `db` | `postgres:16-alpine` | PostgreSQL database | `15432` |
+| `redis` | `redis:7-alpine` | Cache/queue/session backend | `16379` |
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Prerequisites
 
-### Premium Partners
+- Docker Desktop (or Docker Engine + Docker Compose plugin)
+- Git
+- Node.js + npm (only if you run Vite locally)
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+## Quick Start
 
-## Contributing
+1. Clone the repository and move into the project directory.
+2. Build and start all containers.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+docker compose up -d --build
+```
 
-## Code of Conduct
+3. Install PHP dependencies.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+docker compose exec app composer install
+```
 
-## Security Vulnerabilities
+4. Generate an application key.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+docker compose exec app php artisan key:generate
+```
 
-## License
+5. Run database migrations and seed the default admin user.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+docker compose exec app php artisan migrate --seed
+```
+
+6. Open the app:
+
+```text
+http://localhost:8080
+```
+
+The homepage redirects to the Filament admin login page. Log in with the default admin credentials (see [Default Admin](#default-admin)).
+
+Notes:
+
+- If `.env` is missing, `docker/php/entrypoint.sh` copies `.env.example` automatically.
+- Docker-ready defaults are already set in `.env.example`:
+`DB_HOST=db`, `DB_PORT=15432`, `REDIS_HOST=redis`, `REDIS_PORT=16379`.
+
+## Default Admin
+
+After running `migrate --seed` (or `migrate:fresh --seed`), a default admin account is available:
+
+| Field | Value |
+| --- | --- |
+| Email | `admin@admin.com` |
+| Password | `password` |
+
+Admin panel URL: `http://localhost:8080/admin`
+
+Registration is also enabled — new admin accounts can be created via the "Sign up" link on the login page.
+
+## Daily Commands
+
+| Task | Command |
+| --- | --- |
+| Run any Artisan command | `docker compose exec app php artisan <command>` |
+| Run tests | `docker compose exec app php artisan test` |
+| Rebuild database with seed | `docker compose exec app php artisan migrate:fresh --seed` |
+| Clear optimization/cache | `docker compose exec app php artisan optimize:clear` |
+| Open shell in app container | `docker compose exec app sh` |
+| Follow app logs | `docker compose logs -f app` |
+| Follow nginx logs | `docker compose logs -f nginx` |
+| Follow db logs | `docker compose logs -f db` |
+| Follow redis logs | `docker compose logs -f redis` |
+| Stop all services | `docker compose down` |
+| Stop and remove volumes | `docker compose down -v` |
+
+## Vite
+
+Vite scripts are defined in `package.json`.
+
+Run dev watcher on host machine:
+
+```bash
+npm install
+npm run dev
+```
+
+Build production assets:
+
+```bash
+npm run build
+```
+
+## Port Mapping
+
+- HTTP: `http://localhost:8080`
+- PostgreSQL: `localhost:15432`
+- Redis: `localhost:16379`
+
+## Docker Files
+
+- `docker/php/Dockerfile`: PHP 8.3 Alpine image with required extensions
+- `docker/php/entrypoint.sh`: bootstraps storage/cache permissions and auto-creates `.env` if needed
+- `docker/nginx/default.conf`: Nginx config with FastCGI upstream to `app:9000`
+
+## Troubleshooting
+
+Install PHP dependencies if vendor packages are missing:
+
+```bash
+docker compose exec app composer install
+```
+
+Fix storage/bootstrap permissions:
+
+```bash
+docker compose exec app sh -c "chown -R www-data:www-data storage bootstrap/cache && chmod -R ug+rwx storage bootstrap/cache"
+```
+
+Full local reset:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+docker compose exec app composer install
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate --seed
+```
