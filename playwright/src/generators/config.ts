@@ -104,7 +104,7 @@ export function generateGiteaWorkflow(opts: GeneratorOptions): string {
     `          github-server-url: ${gitea.serverUrl}`,
     ``,
     `      - name: Install dependencies`,
-    `        run: npm ci --prefer-offline --no-audit`,
+    `        run: npm install --prefer-offline --no-audit --no-fund`,
     ``,
     `      - name: Run Playwright tests`,
     `        run: npx playwright test`,

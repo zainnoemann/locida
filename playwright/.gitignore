@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+dist/
+test-results/
+playwright-report/
+blob-report/
+.env
+.env.backup
+.env.production
+.DS_Store
+Thumbs.db
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.log
+npm-debug.log*
