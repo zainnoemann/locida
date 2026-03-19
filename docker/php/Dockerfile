@@ -10,6 +10,8 @@ RUN set -eux; \
         freetype \
         libjpeg-turbo \
         git \
+        nodejs \
+        npm \
         unzip; \
     apk add --no-cache --virtual .build-deps \
         $PHPIZE_DEPS \

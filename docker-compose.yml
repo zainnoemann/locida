@@ -19,6 +19,27 @@ services:
     networks:
       - locida
 
+  queue:
+    image: locida:latest
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: locida-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:work", "--tries=3"]
+    volumes:
+      - ./:/var/www/html:delegated
+      - vendor_data:/var/www/html/vendor
+      - storage_data:/var/www/html/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - locida
+
   nginx:
     image: nginx:1.27-alpine
     container_name: locida-nginx
