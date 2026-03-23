@@ -42,7 +42,7 @@ function main(): void {
       playwrightImage:  flag(args, '--gitea-image')      ?? 'mcr.microsoft.com/playwright:v1.58.2-jammy',
       branch:           flag(args, '--gitea-branch')     ?? 'main',
       npmCacheVolume:   flag(args, '--gitea-cache-vol')  ?? 'playwright-npm-cache',
-      reportVolume:     flag(args, '--gitea-report-vol') ?? 'playwright-report',
+      reportBranch:     flag(args, '--gitea-report-branch') ?? 'playwright-report',
     },
   };
 
@@ -141,7 +141,7 @@ function main(): void {
   if (opts.gitea.enabled) {
     console.log(`🚀  Gitea workflow generated — push to trigger CI on branch: ${opts.gitea.branch}`);
     console.log(`    App must be running at: http://${opts.gitea.appHost}`);
-    console.log(`    HTML report saved to Docker volume: ${opts.gitea.reportVolume}`);
+    console.log(`    HTML report published to Git branch: ${opts.gitea.reportBranch}`);
   }
   console.log('');
   console.log(`📦  Next steps:`);
@@ -179,7 +179,7 @@ OPTIONS:
   --gitea-image         Playwright Docker image      (default: mcr.microsoft.com/playwright:v1.58.2-jammy)
   --gitea-branch        CI trigger branch            (default: main)
   --gitea-cache-vol     npm cache volume name        (default: playwright-npm-cache)
-  --gitea-report-vol    HTML report volume name      (default: playwright-report)
+  --gitea-report-branch Git branch for HTML report   (default: playwright-report)
   --no-workflow         Skip .gitea/workflows/ generation
 
   --help, -h            Show this help

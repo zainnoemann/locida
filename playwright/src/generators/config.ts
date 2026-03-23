@@ -69,15 +69,15 @@ export function generateTsConfig(): string {
 
 // Gitea self-hosted: ACTIONS_RUNTIME_URL is set to localhost:3000 by the runner,
 // which is unreachable from inside a container job. upload-artifact cannot be used.
-// Report is instead written to a named Docker volume mounted at /playwright-report.
+// Report is published to a dedicated Git branch for later analysis.
 export function generateGiteaWorkflow(opts: GeneratorOptions): string {
   const { gitea } = opts;
-  const containerOptions = [
+  const containerOptionsParts = [
     `--add-host gitea:host-gateway`,
     `--add-host host.docker.internal:host-gateway`,
     `--mount type=volume,source=${gitea.npmCacheVolume},target=/root/.npm`,
-    `--mount type=volume,source=${gitea.reportVolume},target=/playwright-report`,
-  ].join(' ');
+  ];
+  const containerOptions = containerOptionsParts.join(' ');
 
   return [
     `name: Playwright`,
@@ -109,8 +109,29 @@ export function generateGiteaWorkflow(opts: GeneratorOptions): string {
     `      - name: Run Playwright tests`,
     `        run: npx playwright test`,
     ``,
-    `      - name: Save report to Docker volume`,
+    `      - name: Save report to Git branch`,
     `        if: always()`,
-    `        run: cp -r playwright-report/. /playwright-report/`,
+    `        env:`,
+    `          REPORT_BRANCH: ${gitea.reportBranch}`,
+    `        run: |`,
+    `          if [ ! -d playwright-report ]; then`,
+    `            echo "playwright-report folder not found, skipping publish"`,
+    `            exit 0`,
+    `          fi`,
+    ``,
+    `          TMP_REPORT_DIR="$(mktemp -d)"`,
+    `          cp -r playwright-report/. "$TMP_REPORT_DIR"/`,
+    `          printf "%s\\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$TMP_REPORT_DIR"/GENERATED_AT_UTC.txt`,
+    ``,
+    `          git config user.name "gitea-actions[bot]"`,
+    `          git config user.email "gitea-actions@localhost"`,
+    `          git checkout --orphan "$REPORT_BRANCH-publish"`,
+    `          git rm -rf . >/dev/null 2>&1 || true`,
+    `          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +`,
+    `          cp -r "$TMP_REPORT_DIR"/. .`,
+    `          git add .`,
+    `          git commit -m "chore: update playwright report $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "No report changes to commit"`,
+    `          git branch -M "$REPORT_BRANCH"`,
+    `          git push origin "$REPORT_BRANCH" --force`,
   ].join('\n') + '\n';
 }
