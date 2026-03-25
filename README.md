@@ -9,7 +9,7 @@
 Laravel application with a Docker-first local development setup.
 
 Quick links:
-[Quick Start](#quick-start) • [Default Admin](#default-admin) • [Services](#services) • [Daily Commands](#daily-commands) • [Troubleshooting](#troubleshooting)
+[Quick Start](#quick-start) • [Default Admin](#default-admin) • [Services](#services) • [Daily Commands](#daily-commands) • [Troubleshooting](#troubleshooting) • [Gitea Guide](GITEA.md)
 
 ## Table Of Contents
 
@@ -22,6 +22,7 @@ Quick links:
 - [Vite](#vite)
 - [Port Mapping](#port-mapping)
 - [Docker Files](#docker-files)
+- [Related Docs](#related-docs)
 - [Troubleshooting](#troubleshooting)
 
 ## Overview
@@ -146,6 +147,10 @@ npm run build
 - `docker/php/Dockerfile`: PHP 8.3 Alpine image with required extensions
 - `docker/php/entrypoint.sh`: bootstraps storage/cache permissions and auto-creates `.env` if needed
 - `docker/nginx/default.conf`: Nginx config with FastCGI upstream to `app:9000`
+
+## Related Docs
+
+- [Gitea and Runner Guide](README-GITEA.md)
 
 ## Troubleshooting
 
