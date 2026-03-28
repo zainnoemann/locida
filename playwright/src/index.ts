@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pw-generator — Generate Playwright tests from Laravel source code
+// testgen — Generate Playwright tests from Laravel source code
 
 import * as fs   from 'fs';
 import * as path from 'path';
@@ -17,6 +17,7 @@ import { GeneratorOptions } from './types';
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
 function main(): void {
+  const startTime = Date.now();
   const args = process.argv.slice(2);
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
@@ -46,9 +47,10 @@ function main(): void {
     },
   };
 
-  console.log('\n🔍  Analysing Laravel project...');
-  console.log(`    source : ${path.resolve(laravelPath)}`);
-  console.log(`    output : ${path.resolve(outputDir)}\n`);
+  console.log('\nPlaywright Test Generator v1.0.0\n');
+  console.log('Analysing Laravel workspace...');
+  console.log(`  ✓ Source : ${path.resolve(laravelPath)}`);
+  console.log(`  ✓ Target : ${path.resolve(outputDir)}\n`);
 
   let analysis;
   try {
@@ -61,17 +63,6 @@ function main(): void {
   analysis.testUser = opts.testUser;
   analysis.baseUrl  = opts.baseUrl;
 
-  console.log(`📊  Analysis results:`);
-  console.log(`    resources : ${analysis.resources.length} (${analysis.resources.map(r => r.name).join(', ')})`);
-  console.log(`    auth      : ${analysis.hasAuth    ? '✓' : '✗'}`);
-  console.log(`    profile   : ${analysis.hasProfile ? '✓' : '✗'}`);
-  for (const r of analysis.resources) {
-    const ops = [r.hasIndex && 'index', r.hasCreate && 'create',
-                 r.hasEdit  && 'edit',  r.hasDelete && 'delete'].filter(Boolean).join(' | ');
-    console.log(`    ${r.name.padEnd(16)} [${r.fields.map(f => f.name).join(', ')}]  ${ops}`);
-  }
-  console.log('');
-
   // Create directory tree
   const dirs = [outputDir, 'fixtures', 'pages', 'tests'].map(d =>
     d === outputDir ? d : path.join(outputDir, d)
@@ -79,19 +70,25 @@ function main(): void {
   if (opts.gitea.enabled) dirs.push(path.join(outputDir, '.gitea', 'workflows'));
   dirs.forEach(d => fs.mkdirSync(d, { recursive: true }));
 
-  const written: string[] = [];
+  const written: Record<string, string[]> = {
+    pages: [],
+    tests: [],
+    config: [],
+    workflow: [],
+  };
+
   const write = (rel: string, content: string) => {
     fs.writeFileSync(path.join(outputDir, rel), content, 'utf-8');
-    written.push(rel);
+    if      (rel.startsWith('pages/'))    written.pages.push(rel);
+    else if (rel.startsWith('tests/'))    written.tests.push(rel);
+    else if (rel.startsWith('.gitea/'))   written.workflow.push(rel);
+    else                                  written.config.push(rel);
   };
 
   // Config
   write('playwright.config.ts', generatePlaywrightConfig(opts));
   write('package.json',         generatePackageJson(opts));
   write('tsconfig.json',        generateTsConfig());
-  if (opts.gitea.enabled) {
-    write('.gitea/workflows/playwright.yml', generateGiteaWorkflow(opts));
-  }
 
   // Fixtures & base
   write('fixtures/test-data.ts', generateFixtures(analysis, opts));
@@ -119,39 +116,57 @@ function main(): void {
     write(`tests/${resource.name}.spec.ts`,     generateResourceSpec(resource));
   }
 
-  // Summary
-  console.log('✅  Files generated:\n');
-  const groups: Record<string, string[]> = {
-    Workflow: [], Config: [], Fixtures: [], Pages: [], Tests: [],
-  };
-  for (const f of written) {
-    if      (f.startsWith('.gitea'))     groups.Workflow.push(f);
-    else if (f.startsWith('fixtures/')) groups.Fixtures.push(f);
-    else if (f.startsWith('pages/'))    groups.Pages.push(f);
-    else if (f.startsWith('tests/'))    groups.Tests.push(f);
-    else                                groups.Config.push(f);
-  }
-  for (const [group, files] of Object.entries(groups)) {
-    if (!files.length) continue;
-    console.log(`  ${group}:`);
-    files.forEach(f => console.log(`    ✓ ${f}`));
+  // Gitea workflow
+  if (opts.gitea.enabled) {
+    write('.gitea/workflows/playwright.yml', generateGiteaWorkflow(opts));
   }
 
-  console.log('');
-  if (opts.gitea.enabled) {
-    console.log(`🚀  Gitea workflow generated — push to trigger CI on branch: ${opts.gitea.branch}`);
-    console.log(`    App must be running at: http://${opts.gitea.appHost}`);
-    console.log(`    HTML report published to Git branch: ${opts.gitea.reportBranch}`);
+  // Output generation summary
+  if (written.pages.length > 0) {
+    console.log('Generating Page Objects...');
+    written.pages.forEach(f => console.log(`  ✓ ${f}`));
+    console.log('');
   }
-  console.log('');
-  console.log(`📦  Next steps:`);
-  console.log(`    cd ${outputDir} && npm install`);
-  console.log(`    BASE_URL=${opts.baseUrl} npx playwright test   # run locally`);
-  if (opts.gitea.enabled) {
-    console.log(`    git init && git add . && git commit -m "add playwright tests"`);
-    console.log(`    git remote add origin <gitea-repo-url> && git push -u origin ${opts.gitea.branch}`);
+
+  if (written.tests.length > 0) {
+    console.log('Generating Test Specs...');
+    written.tests.forEach(f => console.log(`  ✓ ${f}`));
+    console.log('');
   }
-  console.log(`\n    test user: ${opts.testUser.email} / ${opts.testUser.password}\n`);
+
+  if (written.config.length > 0) {
+    console.log('Generating Playwright Configuration...');
+    written.config.forEach(f => console.log(`  ✓ ${f}`));
+    console.log('');
+  }
+
+  if (written.workflow.length > 0) {
+    console.log('Generating Gitea CI/CD Workflow...');
+    written.workflow.forEach(f => console.log(`  ✓ ${f}`));
+    console.log('');
+  }
+
+  const totalFiles = Object.values(written).flat().length;
+  const elapsedMs = Date.now() - startTime;
+  const elapsedSec = (elapsedMs / 1000).toFixed(1);
+  console.log(`Done in ${elapsedSec}s. ${totalFiles} artifacts generated successfully.\n`);
+
+  // Next steps
+  console.log('Next Steps:');
+  console.log(`  1. Install dependencies`);
+  console.log(`     $ cd ${outputDir} && npm install\n`);
+  console.log(`  2. Run UI functional tests locally`);
+  console.log(`     $ BASE_URL=${opts.baseUrl} npx playwright test\n`);
+  console.log(`  3. Commit and push to Gitea`);
+  console.log(`     $ git init && git add .`);
+  console.log(`     $ git commit -m "test(ui): add playwright tests"`);
+  console.log(`     $ git remote add origin <gitea-repo-url>`);
+  console.log(`     $ git push -u origin ${opts.gitea.branch}\n`);
+
+  // Test credentials
+  console.log('Test Credentials:');
+  console.log(`  Email    : ${opts.testUser.email}`);
+  console.log(`  Password : ${opts.testUser.password}\n`);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -163,7 +178,7 @@ function flag(args: string[], name: string): string | undefined {
 
 function printHelp(): void {
   console.log(`
-pw-generator — Generate Playwright tests + Gitea CI from a Laravel project
+testgen — Generate Playwright tests + Gitea CI from a Laravel project
 
 USAGE:
   npx ts-node src/index.ts <laravel-path> [output-dir] [options]

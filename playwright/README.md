@@ -1,4 +1,4 @@
-# pw-generator
+# Playwright Test Generator
 
 Static analysis tool that reads a Laravel project and generates Playwright tests. It parses Blade views, routes, migrations, and controllers to produce a fully working Page Object Model test suite with a Gitea CI workflow.
 
