@@ -63,7 +63,7 @@ npx ts-node src/index.ts <laravel-path> [output-dir] [options]
 | `--gitea-image` | Playwright Docker image | `mcr.microsoft.com/playwright:v1.58.2-jammy` |
 | `--gitea-branch` | Branch that triggers the workflow | `main` |
 | `--gitea-cache-vol` | Docker volume name for npm cache | `playwright-npm-cache` |
-| `--gitea-report-branch` | Git branch target for HTML report publish | `playwright-report` |
+| `--gitea-report-branch` | Git branch target for report publish | `playwright-report` |
 | `--no-workflow` | Skip `.gitea/workflows/` generation | — |
 
 ### Examples
@@ -82,7 +82,7 @@ npx ts-node src/index.ts ./app ./tests \
 # Test files only, no CI workflow
 npx ts-node src/index.ts ./app ./tests --no-workflow
 
-# Save HTML report to a Git branch
+# Save report to a Git branch
 npx ts-node src/index.ts ./app ./tests \
   --gitea-report-branch playwright-report
 ```
@@ -163,7 +163,7 @@ git remote add origin http://gitea:3000/<user>/<repo>.git
 git push -u origin main
 ```
 
-The workflow runs automatically and publishes the HTML report to a dedicated Git branch:
+The workflow runs automatically and publishes the report to a dedicated Git branch:
 
 ```bash
 npx ts-node src/index.ts ./app ./pw-tests \
