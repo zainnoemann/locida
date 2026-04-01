@@ -92,7 +92,7 @@ Notes:
 
 ## Default Admin
 
-After running `migrate --seed` (or `migrate:fresh --seed`), a default admin account is available:
+After running `migrate --seed` or `migrate:fresh --seed`, a default admin account is available:
 
 | Field | Value |
 | --- | --- |
@@ -121,19 +121,38 @@ Registration is also enabled — new admin accounts can be created via the "Sign
 
 ## Vite
 
-Vite scripts are defined in `package.json`.
+Vite scripts are defined in `package.json` and should be run from the `app` container.
 
-Run dev watcher on host machine:
+Current Vite inputs are:
+
+- `resources/css/app.css`
+- `resources/css/filament/admin/theme.css`
+- `resources/js/app.js`
+
+The Filament admin panel loads `resources/css/filament/admin/theme.css` via `viteTheme(...)`, so Tailwind utility classes used in Filament Blade views are generated from this theme build.
+
+Install frontend dependencies inside Docker:
 
 ```bash
-npm install
-npm run dev
+docker compose exec app npm install
+```
+
+Run dev watcher:
+
+```bash
+docker compose exec app npm run dev
 ```
 
 Build production assets:
 
 ```bash
-npm run build
+docker compose exec app npm run build
+```
+
+If class changes are not reflected in Filament after build, clear Laravel caches:
+
+```bash
+docker compose exec app php artisan optimize:clear
 ```
 
 ## Port Mapping
@@ -150,7 +169,7 @@ npm run build
 
 ## Related Docs
 
-- [Gitea and Runner Guide](README-GITEA.md)
+- [Gitea and Runner Guide](GITEA.md)
 
 ## Troubleshooting
 
