@@ -131,7 +131,7 @@ class PlaywrightGeneratorService
                 "git commit -m \"auto-generated playwright tests\"",
                 "git branch -M playwright",
                 // Remove existing origin if present, ignore errors
-                "(git remote remove origin 2>nul || true)",
+                "(git remote remove origin 2>/dev/null || true)",
                 // Clear credential cache for the host to prevent interference
                 "git credential reject <<EOF\nprotocol=http\nhost=gitea\nEOF",
                 // Add or update origin with authenticated URL

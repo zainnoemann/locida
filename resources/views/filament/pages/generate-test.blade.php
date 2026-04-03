@@ -1,11 +1,19 @@
 <x-filament-panels::page>
-    <div class="space-y-8 w-full" style="margin-bottom: 2rem;">
-        <x-filament::section style="margin-bottom: 2rem;">
+    <div class="flex flex-col gap-8">
+        <x-filament::section>
             <x-slot name="heading">
                 Generation Timeline
             </x-slot>
 
             @livewire('test-log', ['testId' => $this->record->id, 'viewType' => 'timeline'])
+        </x-filament::section>
+
+        <x-filament::section>
+            <x-slot name="heading">
+                Playwright Report
+            </x-slot>
+
+            @livewire('test-report', ['testId' => $this->record->id])
         </x-filament::section>
 
         <x-filament::section>
