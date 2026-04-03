@@ -2,15 +2,43 @@ import { GeneratorOptions } from '../types';
 
 // ─── Config Generators ───────────────────────────────────────────────────────
 
-export function generatePlaywrightConfig(opts: GeneratorOptions): string {
+export function generatePlaywrightConfig(opts: GeneratorOptions, hasAuth: boolean): string {
+  const projects = hasAuth
+    ? `projects: [
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+      fullyParallel: false,
+      use: { ...devices['Desktop Chrome'], storageState: undefined },
+    },
+    {
+      name: 'auth',
+      testMatch: /auth\.spec\.ts/,
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: undefined },
+    },
+    {
+      name: 'chromium',
+      testIgnore: [/auth\.setup\.ts/, /auth\.spec\.ts/],
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: '.auth/user.json' },
+    },
+  ],`
+    : `projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+  ],`;
+
   return `import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  retries: process.env.CI ? 1 : 0,
+  workers: process.env.CI ? '50%' : undefined,
   reporter: [['html'], ['json', { outputFile: 'playwright-report/report.json' }], ['list']],
 
   use: {
@@ -20,12 +48,7 @@ export default defineConfig({
     headless: true,
   },
 
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-  ],
+  ${projects}
 });
 `;
 }
@@ -42,7 +65,7 @@ export function generatePackageJson(opts: GeneratorOptions): string {
       'test:report': 'playwright show-report',
     },
     devDependencies: {
-      '@playwright/test': '^1.44.0',
+      '@playwright/test': '1.58.2',
       typescript:         '^5.4.0',
       '@types/node':      '^20.0.0',
     },

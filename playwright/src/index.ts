@@ -9,7 +9,7 @@ import { generateBasePage, generateLoginPage,
          generateRegisterPage, generateDashboardPage,
          generateProfilePage, generateResourcePage }   from './generators/pages';
 import { generateAuthSpec, generateProfileSpec,
-         generateResourceSpec }                        from './generators/specs';
+         generateResourceSpec, generateAuthSetupSpec } from './generators/specs';
 import { generatePlaywrightConfig, generatePackageJson,
          generateTsConfig, generateGiteaWorkflow }     from './generators/config';
 import { GeneratorOptions } from './types';
@@ -86,7 +86,7 @@ function main(): void {
   };
 
   // Config
-  write('playwright.config.ts', generatePlaywrightConfig(opts));
+  write('playwright.config.ts', generatePlaywrightConfig(opts, analysis.hasAuth));
   write('package.json',         generatePackageJson(opts));
   write('tsconfig.json',        generateTsConfig());
 
@@ -101,6 +101,7 @@ function main(): void {
     write('pages/LoginPage.ts',    generateLoginPage(loginView));
     write('pages/RegisterPage.ts', generateRegisterPage(registerView));
     write('pages/DashboardPage.ts',generateDashboardPage());
+    write('tests/auth.setup.ts',   generateAuthSetupSpec());
     write('tests/auth.spec.ts',    generateAuthSpec());
   }
 

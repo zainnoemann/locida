@@ -12,7 +12,7 @@ The generator performs **static analysis** on four Laravel source files:
 |---|---|
 | `routes/web.php` | Resource routes, middleware groups, URL patterns |
 | `resources/views/*.blade.php` | Form field labels, input types, button text, table columns |
-| `app/Http/Requests/*.php` | Validation rules (required fields) |
+| `app/Http/Requests/*.php` | Validation rules |
 | `database/migrations/*.php` | Column types, nullable flags, foreign keys |
 
 No application needs to run. No database connection required.
@@ -40,7 +40,7 @@ npx ts-node src/index.ts <laravel-path> [output-dir] [options]
 
 | Argument | Description | Default |
 |---|---|---|
-| `laravel-path` | Path to the Laravel project | *(required)* |
+| `laravel-path` | Path to the Laravel project | *required* |
 | `output-dir` | Directory where tests will be written | `./playwright-tests` |
 
 ### Options
@@ -108,7 +108,7 @@ playwright-tests/
 ├── tests/
 │   ├── auth.spec.ts             ← Login, register, dashboard, navigation
 │   ├── profile.spec.ts          ← Profile info, password update
-│   └── <resource>.spec.ts       ← 7 test groups per resource (see below)
+│   └── <resource>.spec.ts       ← 7 test groups per resource
 ├── playwright.config.ts
 ├── package.json
 └── tsconfig.json
@@ -120,13 +120,13 @@ Each resource generates seven `test.describe` blocks:
 
 | Group | Coverage |
 |---|---|
-| `index — UI elements` | Table visible, create button, named columns |
-| `create — UI elements` | All form fields visible, submit enabled, required attrs, empty defaults |
-| `create — functionality` | Valid create, required field validation, redirect, row count increase |
-| `edit — UI elements` | All fields visible on edit page, current value pre-filled, save button |
-| `edit — functionality` | Successful update, required field validation |
-| `delete — UI elements` | Delete button visible and enabled |
-| `delete — functionality` | Row removed after confirming dialog |
+| `index — Component` | Table visible, create button, named columns |
+| `create — Component` | All form fields visible, submit enabled, required attrs, empty defaults |
+| `create — Functionality` | Valid create, required field validation, redirect, row count increase |
+| `edit — Component` | All fields visible on edit page, current value pre-filled, save button |
+| `edit — Functionality` | Successful update, required field validation |
+| `delete — Component` | Delete button visible and enabled |
+| `delete — Functionality` | Row removed after confirming dialog |
 
 Resources with `select` / foreign key fields also get:
 - A dropdown visibility test in the create and edit UI groups
@@ -152,7 +152,7 @@ npx playwright test --ui
 
 ### Via Gitea CI
 
-Push the generated folder to a Gitea repository. The workflow triggers on every push to `main` (or the configured branch):
+Push the generated folder to a Gitea repository. The workflow triggers on every push to `main` or the configured branch:
 
 ```bash
 cd playwright-tests
