@@ -63,11 +63,20 @@ class PlaywrightGeneratorService
             $storagePath = storage_path('app/latest-tests/' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $test->repo_name));
             $outputDir = $storagePath . '/tests';
             $cloneDir = $storagePath . '/source';
+            $generatedDir = $storagePath . '/generated-playwright';
 
             // Clean up old source if needed
             if (File::exists($cloneDir)) {
                 File::deleteDirectory($cloneDir);
             }
+            if (File::exists($outputDir)) {
+                File::deleteDirectory($outputDir);
+            }
+            if (File::exists($generatedDir)) {
+                File::deleteDirectory($generatedDir);
+            }
+            File::makeDirectory($outputDir, 0755, true);
+            File::makeDirectory($generatedDir, 0755, true);
 
             // Clone source project
             // Assuming the repo_url contains credentials or the system has SSH access/public repo.
@@ -99,7 +108,7 @@ class PlaywrightGeneratorService
             // Run playwright generator
             // Example command from README: npx ts-node src/index.ts <laravel-path> [output-dir] [options]
             $generatorPath = base_path('playwright');
-            $command = "npx ts-node src/index.ts {$cloneDir} {$outputDir} --gitea-branch playwright";
+            $command = "npx ts-node src/index.ts {$cloneDir} {$generatedDir} --gitea-branch playwright";
 
             File::append($logFile, "\nRunning Playwright Generator: {$command}\n");
 
@@ -119,17 +128,59 @@ class PlaywrightGeneratorService
                 return;
             }
 
+            // Put source code at repository root.
+            File::copyDirectory($cloneDir, $outputDir);
+            if (File::exists($outputDir . '/.git')) {
+                File::deleteDirectory($outputDir . '/.git');
+            }
+
+            // Playwright artifacts in a single playwright/ directory.
+            $playwrightDir = $outputDir . '/playwright';
+            if (File::exists($playwrightDir)) {
+                File::deleteDirectory($playwrightDir);
+            }
+            File::makeDirectory($playwrightDir, 0755, true);
+
+            $generatedArtifacts = [
+                'fixtures',
+                'pages',
+                'tests',
+                'playwright.config.ts',
+                'package.json',
+                'tsconfig.json',
+            ];
+            foreach ($generatedArtifacts as $artifact) {
+                $from = $generatedDir . '/' . $artifact;
+                $to = $playwrightDir . '/' . $artifact;
+                if (!File::exists($from)) {
+                    continue;
+                }
+                if (File::isDirectory($from)) {
+                    File::copyDirectory($from, $to);
+                } else {
+                    File::copy($from, $to);
+                }
+            }
+
+            $generatedWorkflowDir = $generatedDir . '/.gitea';
+            if (File::exists($generatedWorkflowDir)) {
+                File::copyDirectory($generatedWorkflowDir, $outputDir . '/.gitea');
+            }
+
+            if (File::exists($generatedDir)) {
+                File::deleteDirectory($generatedDir);
+            }
+
             File::append($logFile, "\nCommitting and pushing generated tests to Gitea...\n");
 
             $gitCommands = [
                 'git config --global --add safe.directory ' . escapeshellarg($outputDir),
-                "git init",
+                "git init -b playwright",
                 "git config user.name 'locida'",
                 "git config user.email 'locida@mail.com'",
                 "git config user.useConfigOnly true",
                 "git add .",
                 "git commit -m \"auto-generated playwright tests\"",
-                "git branch -M playwright",
                 // Remove existing origin if present, ignore errors
                 "(git remote remove origin 2>/dev/null || true)",
                 // Clear credential cache for the host to prevent interference

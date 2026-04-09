@@ -41,7 +41,7 @@ npx ts-node src/index.ts <laravel-path> [output-dir] [options]
 | Argument | Description | Default |
 |---|---|---|
 | `laravel-path` | Path to the Laravel project | *required* |
-| `output-dir` | Directory where tests will be written | `./playwright-tests` |
+| `output-dir` | Directory where tests will be written | `./playwright` |
 
 ### Options
 
@@ -70,20 +70,20 @@ npx ts-node src/index.ts <laravel-path> [output-dir] [options]
 
 ```bash
 # Minimal — defaults work for a standard Gitea + Docker setup
-npx ts-node src/index.ts ./my-laravel-app ./pw-tests
+npx ts-node src/index.ts ./my-laravel-app ./playwright
 
 # Custom test user and Gitea server
-npx ts-node src/index.ts ./app ./tests \
+npx ts-node src/index.ts ./app ./playwright \
   --email admin@app.com \
   --password secret \
   --gitea-server-url http://gitea.local:3000 \
   --gitea-app-host 192.168.1.10:8000
 
 # Test files only, no CI workflow
-npx ts-node src/index.ts ./app ./tests --no-workflow
+npx ts-node src/index.ts ./app ./playwright --no-workflow
 
 # Save report to a Git branch
-npx ts-node src/index.ts ./app ./tests \
+npx ts-node src/index.ts ./app ./playwright \
   --gitea-report-branch playwright-report
 ```
 
@@ -92,7 +92,7 @@ npx ts-node src/index.ts ./app ./tests \
 ## Output
 
 ```
-playwright-tests/
+playwright/
 ├── .gitea/
 │   └── workflows/
 │       └── playwright.yml       ← Gitea Actions CI workflow
@@ -139,7 +139,7 @@ Resources with `select` / foreign key fields also get:
 ### Locally
 
 ```bash
-cd playwright-tests
+cd playwright
 npm install
 BASE_URL=http://localhost:8000 npx playwright test
 
@@ -155,7 +155,7 @@ npx playwright test --ui
 Push the generated folder to a Gitea repository. The workflow triggers on every push to `main` or the configured branch:
 
 ```bash
-cd playwright-tests
+cd playwright
 git init
 git add .
 git commit -m "add playwright tests"
@@ -166,7 +166,7 @@ git push -u origin main
 The workflow runs automatically and publishes the report to a dedicated Git branch:
 
 ```bash
-npx ts-node src/index.ts ./app ./pw-tests \
+npx ts-node src/index.ts ./app ./playwright \
   --gitea-report-branch playwright-report
 
 # After CI run completes, inspect report by cloning branch

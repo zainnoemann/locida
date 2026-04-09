@@ -26,7 +26,7 @@ function main(): void {
   }
 
   const laravelPath = args[0];
-  const outputDir   = args[1] ?? './playwright-tests';
+  const outputDir   = args[1] ?? './playwright';
 
   const opts: GeneratorOptions = {
     outputDir,
@@ -201,9 +201,9 @@ OPTIONS:
   --help, -h            Show this help
 
 EXAMPLES:
-  npx ts-node src/index.ts ./my-laravel-app ./pw-tests
-  npx ts-node src/index.ts ./app ./tests --email admin@app.com --password secret
-  npx ts-node src/index.ts ./app ./tests --no-workflow
+  npx ts-node src/index.ts ./my-laravel-app ./playwright
+  npx ts-node src/index.ts ./app ./playwright --email admin@app.com --password secret
+  npx ts-node src/index.ts ./app ./playwright --no-workflow
 `);
 }
 
