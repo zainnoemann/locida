@@ -43,7 +43,6 @@ function main(): void {
       playwrightImage:  flag(args, '--gitea-image')      ?? 'mcr.microsoft.com/playwright:v1.58.2-jammy',
       branch:           flag(args, '--gitea-branch')     ?? 'main',
       npmCacheVolume:   flag(args, '--gitea-cache-vol')  ?? 'playwright-npm-cache',
-      reportBranch:     flag(args, '--gitea-report-branch') ?? 'playwright-report',
     },
   };
 
@@ -195,7 +194,6 @@ OPTIONS:
   --gitea-image         Playwright Docker image      (default: mcr.microsoft.com/playwright:v1.58.2-jammy)
   --gitea-branch        CI trigger branch            (default: main)
   --gitea-cache-vol     npm cache volume name        (default: playwright-npm-cache)
-  --gitea-report-branch Git branch for HTML report   (default: playwright-report)
   --no-workflow         Skip .gitea/workflows/ generation
 
   --help, -h            Show this help

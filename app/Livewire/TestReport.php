@@ -12,7 +12,8 @@ class TestReport extends Component
     public int $testId;
     public string $statusFilter = 'all';
     public string $keyword = '';
-    private const REPORT_BRANCH = 'playwright-report';
+    private const REPORT_BRANCH = 'playwright';
+    private const PRIMARY_REPORT_PATH = 'playwright/reports/report.json';
 
     public function mount(int $testId)
     {
@@ -70,7 +71,7 @@ class TestReport extends Component
         if (! is_array($json)) {
             return [
                 'available' => false,
-                'message' => 'report.json not found yet in branch ' . self::REPORT_BRANCH . '.',
+                'message' => 'Report not found yet at ' . self::PRIMARY_REPORT_PATH . ' in branch ' . self::REPORT_BRANCH . '.',
             ];
         }
         $stats = is_array($json['stats'] ?? null) ? $json['stats'] : [];
@@ -105,7 +106,13 @@ class TestReport extends Component
 
     private function fetchReportJson(string $apiUrl, string $apiToken, string $owner, string $repo): ?array
     {
-        $candidatePaths = ['report.json', 'playwright-report/report.json'];
+        $candidatePaths = [
+            self::PRIMARY_REPORT_PATH,
+            // backward compatibility with older generated workflows/branches
+            'playwright/playwright-report/report.json',
+            'playwright-report/report.json',
+            'report.json',
+        ];
         foreach ($candidatePaths as $path) {
             $response = Http::withToken($apiToken)
                 ->timeout(10)

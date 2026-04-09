@@ -180,7 +180,7 @@ class PlaywrightGeneratorService
                 "git config user.email 'locida@mail.com'",
                 "git config user.useConfigOnly true",
                 "git add .",
-                "git commit -m \"auto-generated playwright tests\"",
+                "git commit -m \"test(playwright): generate tests\"",
                 // Remove existing origin if present, ignore errors
                 "(git remote remove origin 2>/dev/null || true)",
                 // Clear credential cache for the host to prevent interference

@@ -63,7 +63,6 @@ npx ts-node src/index.ts <laravel-path> [output-dir] [options]
 | `--gitea-image` | Playwright Docker image | `mcr.microsoft.com/playwright:v1.58.2-jammy` |
 | `--gitea-branch` | Branch that triggers the workflow | `main` |
 | `--gitea-cache-vol` | Docker volume name for npm cache | `playwright-npm-cache` |
-| `--gitea-report-branch` | Git branch target for report publish | `playwright-report` |
 | `--no-workflow` | Skip `.gitea/workflows/` generation | — |
 
 ### Examples
@@ -82,9 +81,6 @@ npx ts-node src/index.ts ./app ./playwright \
 # Test files only, no CI workflow
 npx ts-node src/index.ts ./app ./playwright --no-workflow
 
-# Save report to a Git branch
-npx ts-node src/index.ts ./app ./playwright \
-  --gitea-report-branch playwright-report
 ```
 
 ---
@@ -163,15 +159,14 @@ git remote add origin http://gitea:3000/<user>/<repo>.git
 git push -u origin main
 ```
 
-The workflow runs automatically and publishes the report to a dedicated Git branch:
+The workflow runs automatically and saves report files into `playwright/reports` on the same branch:
 
 ```bash
-npx ts-node src/index.ts ./app ./playwright \
-  --gitea-report-branch playwright-report
+npx ts-node src/index.ts ./app ./playwright
 
-# After CI run completes, inspect report by cloning branch
-git fetch origin playwright-report
-git checkout playwright-report
+# After CI run completes, inspect report in:
+# playwright/reports/index.html
+# playwright/reports/report.json
 ```
 
 ### Test user setup
@@ -205,7 +200,7 @@ container:
 
 **Why `upload-artifact` is not used:** Gitea self-hosted sets `ACTIONS_RUNTIME_URL` to `localhost:3000`, which is unreachable from inside a container job. All versions of `upload-artifact` fail with `ECONNREFUSED 127.0.0.1:3000`.
 
-The generator publishes report files into a dedicated Git branch (default branch name: `playwright-report`) so you can review report contents from repository history.
+The generator stores report files in `playwright/reports` on the same branch, so they are versioned alongside generated tests.
 
 ---
 

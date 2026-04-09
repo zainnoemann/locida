@@ -92,7 +92,7 @@ export function generateTsConfig(): string {
 
 // Gitea self-hosted: ACTIONS_RUNTIME_URL is set to localhost:3000 by the runner,
 // which is unreachable from inside a container job. upload-artifact cannot be used.
-// Report is published to a dedicated Git branch for later analysis.
+// Report is committed into the same branch under playwright/reports.
 export function generateGiteaWorkflow(opts: GeneratorOptions): string {
   const { gitea } = opts;
   const containerOptionsParts = [
@@ -141,31 +141,25 @@ export function generateGiteaWorkflow(opts: GeneratorOptions): string {
     `          cd "$PLAYWRIGHT_DIR"`,
     `          npx playwright test`,
     ``,
-    `      - name: Save report to Git branch`,
-    `        if: always()`,
-    `        env:`,
-    `          REPORT_BRANCH: ${gitea.reportBranch}`,
+    `      - name: Save report to branch folder`,
+    `        if: always() && github.actor != 'gitea-actions[bot]'`,
     `        run: |`,
     `          if [ ! -d "$PLAYWRIGHT_DIR/playwright-report" ] && [ ! -f "$PLAYWRIGHT_DIR/playwright-report.json" ]; then`,
     `            echo "No Playwright report output found, skipping publish"`,
     `            exit 0`,
     `          fi`,
     ``,
-    `          TMP_REPORT_DIR="$(mktemp -d)"`,
-    `          if [ -d "$PLAYWRIGHT_DIR/playwright-report" ]; then cp -r "$PLAYWRIGHT_DIR/playwright-report"/. "$TMP_REPORT_DIR"/; fi`,
-    `          if [ -f "$PLAYWRIGHT_DIR/playwright-report/report.json" ]; then cp "$PLAYWRIGHT_DIR/playwright-report/report.json" "$TMP_REPORT_DIR"/report.json; fi`,
-    `          if [ -f "$PLAYWRIGHT_DIR/playwright-report.json" ]; then cp "$PLAYWRIGHT_DIR/playwright-report.json" "$TMP_REPORT_DIR"/report.json; fi`,
-    `          printf "%s\\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$TMP_REPORT_DIR"/GENERATED_AT_UTC.txt`,
+    `          REPORT_DIR="$PLAYWRIGHT_DIR/reports"`,
+    `          rm -rf "$REPORT_DIR"`,
+    `          mkdir -p "$REPORT_DIR"`,
+    `          if [ -d "$PLAYWRIGHT_DIR/playwright-report" ]; then cp -r "$PLAYWRIGHT_DIR/playwright-report"/. "$REPORT_DIR"/; fi`,
+    `          if [ -f "$PLAYWRIGHT_DIR/playwright-report/report.json" ]; then cp "$PLAYWRIGHT_DIR/playwright-report/report.json" "$REPORT_DIR/report.json"; fi`,
+    `          if [ -f "$PLAYWRIGHT_DIR/playwright-report.json" ] && [ ! -f "$REPORT_DIR/report.json" ]; then cp "$PLAYWRIGHT_DIR/playwright-report.json" "$REPORT_DIR/report.json"; fi`,
     ``,
     `          git config user.name "gitea-actions[bot]"`,
     `          git config user.email "gitea-actions@localhost"`,
-    `          git checkout --orphan "$REPORT_BRANCH-publish"`,
-    `          git rm -rf . >/dev/null 2>&1 || true`,
-    `          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +`,
-    `          cp -r "$TMP_REPORT_DIR"/. .`,
-    `          git add .`,
-    `          git commit -m "chore: update playwright report $(date -u +%Y-%m-%dT%H:%M:%SZ)" || echo "No report changes to commit"`,
-    `          git branch -M "$REPORT_BRANCH"`,
-    `          git push origin "$REPORT_BRANCH" --force`,
+    `          git add "$REPORT_DIR"`,
+    `          git commit -m "test(playwright): generate report" || echo "No report changes to commit"`,
+    `          git push origin "HEAD:${gitea.branch}"`,
   ].join('\n') + '\n';
 }

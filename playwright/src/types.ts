@@ -88,6 +88,5 @@ export interface GeneratorOptions {
     playwrightImage: string;
     branch: string;
     npmCacheVolume: string;
-    reportBranch: string;
   };
 }
