@@ -39,7 +39,7 @@ function main(): void {
     gitea: {
       enabled:          !args.includes('--no-workflow'),
       serverUrl:        flag(args, '--gitea-server-url') ?? 'http://gitea:3000',
-      appHost:          flag(args, '--gitea-app-host')   ?? 'host.docker.internal:8000',
+      appHost:          flag(args, '--gitea-app-host')   ?? '127.0.0.1:8000',
       playwrightImage:  flag(args, '--gitea-image')      ?? 'mcr.microsoft.com/playwright:v1.58.2-jammy',
       branch:           flag(args, '--gitea-branch')     ?? 'main',
       npmCacheVolume:   flag(args, '--gitea-cache-vol')  ?? 'playwright-npm-cache',
@@ -190,7 +190,7 @@ OPTIONS:
   --user-name           Test user display name       (default: Test User)
 
   --gitea-server-url    Gitea server URL             (default: http://gitea:3000)
-  --gitea-app-host      Laravel app host in Docker   (default: host.docker.internal:8000)
+  --gitea-app-host      Laravel app host in CI job   (default: 127.0.0.1:8000)
   --gitea-image         Playwright Docker image      (default: mcr.microsoft.com/playwright:v1.58.2-jammy)
   --gitea-branch        CI trigger branch            (default: main)
   --gitea-cache-vol     npm cache volume name        (default: playwright-npm-cache)

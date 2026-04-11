@@ -59,7 +59,7 @@ npx ts-node src/index.ts <laravel-path> [output-dir] [options]
 | Flag | Description | Default |
 |---|---|---|
 | `--gitea-server-url` | Gitea server URL | `http://gitea:3000` |
-| `--gitea-app-host` | Laravel app host inside Docker | `host.docker.internal:8000` |
+| `--gitea-app-host` | Laravel app host in CI job | `127.0.0.1:8000` |
 | `--gitea-image` | Playwright Docker image | `mcr.microsoft.com/playwright:v1.58.2-jammy` |
 | `--gitea-branch` | Branch that triggers the workflow | `main` |
 | `--gitea-cache-vol` | Docker volume name for npm cache | `playwright-npm-cache` |
@@ -159,7 +159,7 @@ git remote add origin http://gitea:3000/<user>/<repo>.git
 git push -u origin main
 ```
 
-The workflow runs automatically and saves report files into `playwright/reports` on the same branch:
+The workflow runs automatically, boots the target Laravel app inside the CI job, and saves report files into `playwright/reports` on the same branch:
 
 ```bash
 npx ts-node src/index.ts ./app ./playwright
@@ -171,7 +171,7 @@ npx ts-node src/index.ts ./app ./playwright
 
 ### Test user setup
 
-Create the test user in Laravel before running tests:
+For local runs, create the test user in Laravel before running tests:
 
 ```bash
 php artisan tinker
