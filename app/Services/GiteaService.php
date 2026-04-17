@@ -13,8 +13,8 @@ class GiteaService
 
     public function __construct()
     {
-        $this->apiUrl = config('services.gitea.url', env('GITEA_API_URL'));
-        $this->apiToken = config('services.gitea.token', env('GITEA_API_TOKEN'));
+        $this->apiUrl = (string) config('services.gitea.url');
+        $this->apiToken = (string) config('services.gitea.token');
     }
 
     /**

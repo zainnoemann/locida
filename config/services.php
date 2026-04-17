@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'gitea' => [
+        'url' => env('GITEA_API_URL'),
+        'token' => env('GITEA_API_TOKEN'),
+    ],
+
 ];

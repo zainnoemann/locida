@@ -45,6 +45,13 @@ class TestForm
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(255),
+                \Filament\Forms\Components\TextInput::make('app_url')
+                    ->label('App URL')
+                    ->placeholder('Enter App URL')
+                    ->url()
+                    ->required()
+                    ->default(config('app.url'))
+                    ->maxLength(2048),
             ]);
     }
 }

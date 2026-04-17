@@ -52,8 +52,8 @@ class TestReport extends Component
 
     private function buildReportSummary(Test $test): array
     {
-        $apiUrl = rtrim((string) env('GITEA_API_URL', ''), '/');
-        $apiToken = (string) env('GITEA_API_TOKEN', '');
+        $apiUrl = rtrim((string) config('services.gitea.url'), '/');
+        $apiToken = (string) config('services.gitea.token');
         if ($apiUrl === '' || $apiToken === '') {
             return [
                 'available' => false,

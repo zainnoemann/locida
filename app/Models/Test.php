@@ -17,6 +17,7 @@ class Test extends Model
         'name',
         'repo_name',
         'repo_url',
+        'app_url',
         'status',
         'error',
         'started_at',

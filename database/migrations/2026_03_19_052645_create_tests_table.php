@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('repo_name')->unique();
             $table->string('repo_url');
+            $table->string('app_url')->nullable();
             $table->string('status')->default('none')->index();
             $table->text('error')->nullable();
             $table->timestamp('started_at')->nullable();

@@ -9,6 +9,34 @@ use Illuminate\Support\Facades\Process;
 
 class PlaywrightGeneratorService
 {
+    private function normalizeRuntimeHost(string $host): string
+    {
+        if (in_array($host, ['localhost', '127.0.0.1', '0.0.0.0'], true)) {
+            return 'host.docker.internal';
+        }
+
+        return $host;
+    }
+
+    private function resolveGitIdentity(?string $fullName): array
+    {
+        $username = 'gitea';
+
+        if (! empty($fullName) && str_contains($fullName, '/')) {
+            [$owner] = explode('/', $fullName, 2);
+            if (! empty($owner)) {
+                $username = $owner;
+            }
+        }
+
+        $emailLocalPart = preg_replace('/[^a-zA-Z0-9._-]/', '', $username);
+        if (empty($emailLocalPart)) {
+            $emailLocalPart = 'gitea';
+        }
+
+        return [$username, $emailLocalPart . '@users.noreply.gitea.local'];
+    }
+
     private function buildAuthenticatedGitUrl(string $url, ?string $token, ?string $fullName = null): string
     {
         if (empty($token) || !str_starts_with($url, 'http')) {
@@ -20,20 +48,52 @@ class PlaywrightGeneratorService
             return $url;
         }
 
-        // For Gitea over HTTP(S), use username + personal access token as password.
-        $username = 'git';
-        if (!empty($fullName) && str_contains($fullName, '/')) {
-            [$owner] = explode('/', $fullName, 2);
-            if (!empty($owner)) {
-                $username = $owner;
-            }
-        }
+        // For Gitea over HTTP(S), use repo owner username + personal access token.
+        [$username] = $this->resolveGitIdentity($fullName);
 
         $auth = rawurlencode($username) . ':' . rawurlencode($token) . '@';
 
         return $parsedUrl['scheme'] . '://' . $auth . $parsedUrl['host']
             . (isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '')
             . $parsedUrl['path'];
+    }
+
+    private function resolveTargetUrl(?string $testUrl): string
+    {
+        $candidate = trim((string) $testUrl);
+
+        if ($candidate === '') {
+            $candidate = (string) config('app.url', 'http://localhost:8000');
+        }
+
+        if (! str_starts_with($candidate, 'http://') && ! str_starts_with($candidate, 'https://')) {
+            $candidate = 'http://' . ltrim($candidate, '/');
+        }
+
+        $parsed = parse_url($candidate);
+        if ($parsed !== false && ! empty($parsed['host'])) {
+            $scheme = $parsed['scheme'] ?? 'http';
+            $host = $this->normalizeRuntimeHost($parsed['host']);
+            $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+            $path = $parsed['path'] ?? '';
+            $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
+            $fragment = isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '';
+
+            $candidate = $scheme . '://' . $host . $port . $path . $query . $fragment;
+        }
+
+        return rtrim($candidate, '/');
+    }
+
+    private function resolveGiteaAppHost(string $targetUrl): string
+    {
+        $parsedUrl = parse_url($targetUrl);
+        $host = $parsedUrl['host'] ?? '127.0.0.1';
+        $port = $parsedUrl['port'] ?? (($parsedUrl['scheme'] ?? 'http') === 'https' ? 443 : 80);
+
+        $host = $this->normalizeRuntimeHost($host);
+
+        return $host . ':' . $port;
     }
 
     public function generateForTest(Test $test)
@@ -81,7 +141,10 @@ class PlaywrightGeneratorService
             // Clone source project
             // Assuming the repo_url contains credentials or the system has SSH access/public repo.
             $cloneUrl = $test->repo_url;
-            $giteaToken = env('GITEA_API_TOKEN');
+            $giteaToken = (string) config('services.gitea.token');
+            [$gitIdentityName, $gitIdentityEmail] = $this->resolveGitIdentity($test->repo_name);
+            $targetUrl = $this->resolveTargetUrl($test->app_url);
+            $giteaAppHost = $this->resolveGiteaAppHost($targetUrl);
 
             // Map localhost to the internal gitea container if running in Docker
             $cloneUrl = str_replace(['localhost:3000', '127.0.0.1:3000'], 'gitea:3000', $cloneUrl);
@@ -108,7 +171,12 @@ class PlaywrightGeneratorService
             // Run playwright generator
             // Example command from README: npx ts-node src/index.ts <laravel-path> [output-dir] [options]
             $generatorPath = base_path('playwright');
-            $command = "npx ts-node src/index.ts {$cloneDir} {$generatedDir} --gitea-branch playwright";
+            $command = 'npx ts-node src/index.ts '
+                . escapeshellarg($cloneDir) . ' '
+                . escapeshellarg($generatedDir)
+                . ' --base-url ' . escapeshellarg($targetUrl)
+                . ' --gitea-app-host ' . escapeshellarg($giteaAppHost)
+                . ' --gitea-branch playwright';
 
             File::append($logFile, "\nRunning Playwright Generator: {$command}\n");
 
@@ -176,9 +244,8 @@ class PlaywrightGeneratorService
             $gitCommands = [
                 'git config --global --add safe.directory ' . escapeshellarg($outputDir),
                 "git init -b playwright",
-                "git config user.name 'locida'",
-                "git config user.email 'locida@mail.com'",
-                "git config user.useConfigOnly true",
+                'git config user.name ' . escapeshellarg($gitIdentityName),
+                'git config user.email ' . escapeshellarg($gitIdentityEmail),
                 "git add .",
                 "git commit -m \"test(playwright): generate tests\"",
                 // Remove existing origin if present, ignore errors

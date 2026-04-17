@@ -30,6 +30,7 @@ class TestTable
                 'name',
                 'repo_name',
                 'repo_url',
+                'app_url',
                 'status',
                 'error',
                 'started_at',
@@ -50,6 +51,12 @@ class TestTable
                     ->tooltip(fn(?string $state): ?string => $state),
                 \Filament\Tables\Columns\TextColumn::make('repo_url')
                     ->label('Repository URL')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->copyable()
+                    ->limit(50)
+                    ->tooltip(fn(?string $state): ?string => $state),
+                \Filament\Tables\Columns\TextColumn::make('app_url')
+                    ->label('App URL')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->copyable()
                     ->limit(50)
