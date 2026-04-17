@@ -9,7 +9,7 @@
 Laravel application with a Docker-first local development setup.
 
 Quick links:
-[Quick Start](#quick-start) • [Default Admin](#default-admin) • [Services](#services) • [Daily Commands](#daily-commands) • [Troubleshooting](#troubleshooting) • [Gitea Guide](GITEA.md)
+[Quick Start](#quick-start) • [Default Admin](#default-admin) • [Services](#services) • [Daily Commands](#daily-commands) • [Playwright Target App](#playwright-target-app) • [Troubleshooting](#troubleshooting) • [Gitea Guide](GITEA.md)
 
 ## Table Of Contents
 
@@ -19,6 +19,7 @@ Quick links:
 - [Quick Start](#quick-start)
 - [Default Admin](#default-admin)
 - [Daily Commands](#daily-commands)
+- [Playwright Target App](#playwright-target-app)
 - [Vite](#vite)
 - [Port Mapping](#port-mapping)
 - [Docker Files](#docker-files)
@@ -118,6 +119,16 @@ Registration is also enabled — new admin accounts can be created via the "Sign
 | Follow redis logs | `docker compose logs -f redis` |
 | Stop all services | `docker compose down` |
 | Stop and remove volumes | `docker compose down -v` |
+
+## Playwright Target App
+
+Before running Playwright tests against a target Laravel app, set:
+
+```dotenv
+APP_DEBUG=false
+```
+
+`APP_DEBUG=true` can render verbose exception pages, which often makes Playwright assertions, snapshots, and screenshots flaky.
 
 ## Vite
 

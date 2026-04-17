@@ -10,6 +10,7 @@ class GenerateTestJob implements ShouldQueue
     use Queueable;
 
     public $test;
+    public $timeout = 1800;
 
     /**
      * Create a new job instance.

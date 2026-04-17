@@ -18,6 +18,7 @@ class TestLog extends Component
         ['key' => 'clone', 'label' => 'Clone Source', 'marker' => 'Cloning source'],
         ['key' => 'generate', 'label' => 'Generate Tests', 'marker' => 'Running Playwright Generator'],
         ['key' => 'push', 'label' => 'Push Branch', 'marker' => 'Committing and pushing generated tests to Gitea'],
+        ['key' => 'test', 'label' => 'Playwright Tests', 'marker' => 'Playwright tests on Gitea Actions'],
         ['key' => 'done', 'label' => 'Completed', 'marker' => 'Done.'],
     ];
 
