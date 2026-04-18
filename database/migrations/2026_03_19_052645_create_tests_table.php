@@ -16,6 +16,8 @@ return new class extends Migration
             $table->string('name');
             $table->string('repo_name')->unique();
             $table->string('repo_url');
+            $table->string('source_branch')->default('main');
+            $table->string('test_branch')->default('playwright');
             $table->string('app_url')->nullable();
             $table->string('status')->default('none')->index();
             $table->text('error')->nullable();

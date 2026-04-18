@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Process;
 
 class PlaywrightGeneratorService
 {
-    private const PLAYWRIGHT_BRANCH = 'playwright';
+    private const DEFAULT_SOURCE_BRANCH = 'main';
+    private const DEFAULT_TEST_BRANCH = 'playwright';
     private const ACTIONS_POLL_INTERVAL_SECONDS = 5;
     private const ACTIONS_MAX_WAIT_SECONDS = 900;
     private const GENERATED_ARTIFACTS = [
@@ -117,6 +118,20 @@ class PlaywrightGeneratorService
         }
 
         return [$parts[0], $parts[1]];
+    }
+
+    private function resolveSourceBranch(Test $test): string
+    {
+        $branch = trim((string) ($test->source_branch ?? ''));
+
+        return $branch !== '' ? $branch : self::DEFAULT_SOURCE_BRANCH;
+    }
+
+    private function resolveTestBranch(Test $test): string
+    {
+        $branch = trim((string) ($test->test_branch ?? ''));
+
+        return $branch !== '' ? $branch : self::DEFAULT_TEST_BRANCH;
     }
 
     private function normalizeActionRunPayload(array $payload): array
@@ -435,7 +450,7 @@ class PlaywrightGeneratorService
         }
     }
 
-    private function waitForPlaywrightActions(string $logFile, string $repoFullName, string $headSha): array
+    private function waitForPlaywrightActions(string $logFile, string $repoFullName, string $testBranch, string $headSha): array
     {
         $apiUrl = rtrim((string) config('services.gitea.url'), '/');
         $apiToken = (string) config('services.gitea.token');
@@ -461,11 +476,11 @@ class PlaywrightGeneratorService
             }
 
             if ($run === null) {
-                $run = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, self::PLAYWRIGHT_BRANCH, $headSha);
+                $run = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, $testBranch, $headSha);
             }
 
             if ($run === null && $trackedRunId !== null) {
-                $latestRun = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, self::PLAYWRIGHT_BRANCH);
+                $latestRun = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, $testBranch);
                 if ($latestRun !== null) {
                     $latestRunId = (int) ($latestRun['id'] ?? 0);
                     // Accept latest run as fallback even when already completed.
@@ -586,13 +601,20 @@ class PlaywrightGeneratorService
         ]);
     }
 
-    private function cloneSourceRepository(Test $test, string $logFile, string $gitUrl, string $cloneDir): bool
+    private function cloneSourceRepository(Test $test, string $logFile, string $gitUrl, string $cloneDir, string $sourceBranch): bool
     {
-        $this->appendLog($logFile, "Cloning source from {$test->repo_url}...\n");
+        $this->appendLog($logFile, "Cloning source from {$test->repo_url} (branch: {$sourceBranch})...\n");
 
-        $cloneProcess = Process::run('git clone ' . escapeshellarg($gitUrl) . ' ' . escapeshellarg($cloneDir), function (string $type, string $output) use ($logFile) {
+        $cloneProcess = Process::run(
+            'git clone --branch ' . escapeshellarg($sourceBranch)
+            . ' --single-branch '
+            . escapeshellarg($gitUrl)
+            . ' '
+            . escapeshellarg($cloneDir),
+            function (string $type, string $output) use ($logFile) {
             File::append($logFile, $output);
-        });
+            }
+        );
 
         if (! $cloneProcess->failed()) {
             return true;
@@ -608,7 +630,7 @@ class PlaywrightGeneratorService
         return false;
     }
 
-    private function runPlaywrightGenerator(Test $test, string $logFile, string $cloneDir, string $generatedDir, string $targetUrl, string $giteaAppHost): bool
+    private function runPlaywrightGenerator(Test $test, string $logFile, string $cloneDir, string $generatedDir, string $targetUrl, string $giteaAppHost, string $testBranch): bool
     {
         $generatorPath = base_path('playwright');
         $command = 'npx ts-node src/index.ts '
@@ -616,7 +638,7 @@ class PlaywrightGeneratorService
             . escapeshellarg($generatedDir)
             . ' --base-url ' . escapeshellarg($targetUrl)
             . ' --gitea-app-host ' . escapeshellarg($giteaAppHost)
-            . ' --gitea-branch ' . self::PLAYWRIGHT_BRANCH;
+            . ' --gitea-branch ' . escapeshellarg($testBranch);
 
         $this->appendLog($logFile, "\nRunning Playwright Generator: {$command}\n");
 
@@ -681,13 +703,13 @@ class PlaywrightGeneratorService
         }
     }
 
-    private function pushPlaywrightBranch(Test $test, string $logFile, string $outputDir, string $gitUrl, string $gitIdentityName, string $gitIdentityEmail): bool
+    private function pushPlaywrightBranch(Test $test, string $logFile, string $outputDir, string $gitUrl, string $gitIdentityName, string $gitIdentityEmail, string $testBranch): bool
     {
-        $this->appendLog($logFile, "\nCommitting and pushing generated tests to Gitea...\n");
+        $this->appendLog($logFile, "\nCommitting and pushing generated tests to Gitea branch {$testBranch}...\n");
 
         $gitCommands = [
             'git config --global --add safe.directory ' . escapeshellarg($outputDir),
-            'git init -b ' . self::PLAYWRIGHT_BRANCH,
+            'git init -b ' . escapeshellarg($testBranch),
             'git config user.name ' . escapeshellarg($gitIdentityName),
             'git config user.email ' . escapeshellarg($gitIdentityEmail),
             'git add .',
@@ -695,7 +717,7 @@ class PlaywrightGeneratorService
             '(git remote remove origin 2>/dev/null || true)',
             "git credential reject <<EOF\nprotocol=http\nhost=gitea\nEOF",
             'git remote add origin ' . escapeshellarg($gitUrl) . ' || git remote set-url origin ' . escapeshellarg($gitUrl),
-            'git push -u origin ' . self::PLAYWRIGHT_BRANCH . ' --force',
+            'git push -u origin ' . escapeshellarg($testBranch) . ' --force',
         ];
 
         foreach ($gitCommands as $cmd) {
@@ -775,6 +797,8 @@ class PlaywrightGeneratorService
             $cloneUrl = $test->repo_url;
             $giteaToken = (string) config('services.gitea.token');
             [$gitIdentityName, $gitIdentityEmail] = $this->resolveGitIdentity($test->repo_name);
+            $sourceBranch = $this->resolveSourceBranch($test);
+            $testBranch = $this->resolveTestBranch($test);
             $targetUrl = $this->resolveTargetUrl($test->app_url);
             $giteaAppHost = $this->resolveGiteaAppHost($targetUrl);
 
@@ -782,24 +806,24 @@ class PlaywrightGeneratorService
             $cloneUrl = str_replace(['localhost:3000', '127.0.0.1:3000'], 'gitea:3000', $cloneUrl);
             $gitUrl = $this->buildAuthenticatedGitUrl($cloneUrl, $giteaToken, $test->repo_name);
 
-            if (! $this->cloneSourceRepository($test, $logFile, $gitUrl, $paths['clone'])) {
+            if (! $this->cloneSourceRepository($test, $logFile, $gitUrl, $paths['clone'], $sourceBranch)) {
                 return;
             }
 
-            if (! $this->runPlaywrightGenerator($test, $logFile, $paths['clone'], $paths['generated'], $targetUrl, $giteaAppHost)) {
+            if (! $this->runPlaywrightGenerator($test, $logFile, $paths['clone'], $paths['generated'], $targetUrl, $giteaAppHost, $testBranch)) {
                 return;
             }
 
             $this->prepareOutputRepository($paths['clone'], $paths['output']);
             $this->publishGeneratedArtifacts($paths['generated'], $paths['output']);
 
-            if (! $this->pushPlaywrightBranch($test, $logFile, $paths['output'], $gitUrl, $gitIdentityName, $gitIdentityEmail)) {
+            if (! $this->pushPlaywrightBranch($test, $logFile, $paths['output'], $gitUrl, $gitIdentityName, $gitIdentityEmail, $testBranch)) {
                 return;
             }
 
             $headSha = $this->resolveHeadSha($paths['output']);
 
-            $actionsResult = $this->waitForPlaywrightActions($logFile, (string) $test->repo_name, $headSha);
+            $actionsResult = $this->waitForPlaywrightActions($logFile, (string) $test->repo_name, $testBranch, $headSha);
             if (! ($actionsResult['ok'] ?? false)) {
                 $error = (string) ($actionsResult['error'] ?? 'Playwright tests failed on Gitea Actions.');
                 Log::error('Playwright actions validation failed', [

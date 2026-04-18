@@ -12,7 +12,7 @@ class TestReport extends Component
     public int $testId;
     public string $statusFilter = 'all';
     public string $keyword = '';
-    private const REPORT_BRANCH = 'playwright';
+    private const DEFAULT_TEST_BRANCH = 'playwright';
     private const PRIMARY_REPORT_PATH = 'playwright/reports/report.json';
 
     public function mount(int $testId)
@@ -36,7 +36,7 @@ class TestReport extends Component
 
     public function getReportProperty(): array
     {
-        $test = Test::query()->select(['id', 'repo_name'])->find($this->testId);
+        $test = Test::query()->select(['id', 'repo_name', 'test_branch'])->find($this->testId);
         if ($test === null) {
             return [
                 'available' => false,
@@ -61,17 +61,18 @@ class TestReport extends Component
             ];
         }
         [$owner, $repo] = $this->parseRepoFullName($test->repo_name ?? '');
+        $testBranch = $this->resolveTestBranch($test);
         if ($owner === null || $repo === null) {
             return [
                 'available' => false,
                 'message' => 'Invalid repository name format. Expected owner/repo.',
             ];
         }
-        $json = $this->fetchReportJson($apiUrl, $apiToken, $owner, $repo);
+        $json = $this->fetchReportJson($apiUrl, $apiToken, $owner, $repo, $testBranch);
         if (! is_array($json)) {
             return [
                 'available' => false,
-                'message' => 'Report not found yet at ' . self::PRIMARY_REPORT_PATH . ' in branch ' . self::REPORT_BRANCH . '.',
+                'message' => 'Report not found yet at ' . self::PRIMARY_REPORT_PATH . ' in branch ' . $testBranch . '.',
             ];
         }
         $stats = is_array($json['stats'] ?? null) ? $json['stats'] : [];
@@ -81,7 +82,7 @@ class TestReport extends Component
         $skipped = (int) ($stats['skipped'] ?? 0);
         return [
             'available' => true,
-            'branch' => self::REPORT_BRANCH,
+            'branch' => $testBranch,
             'generatedAt' => $stats['startTime'] ?? null,
             'durationMs' => (int) ($stats['duration'] ?? 0),
             'stats' => [
@@ -104,7 +105,14 @@ class TestReport extends Component
         return [$parts[0], $parts[1]];
     }
 
-    private function fetchReportJson(string $apiUrl, string $apiToken, string $owner, string $repo): ?array
+    private function resolveTestBranch(Test $test): string
+    {
+        $branch = trim((string) ($test->test_branch ?? ''));
+
+        return $branch !== '' ? $branch : self::DEFAULT_TEST_BRANCH;
+    }
+
+    private function fetchReportJson(string $apiUrl, string $apiToken, string $owner, string $repo, string $testBranch): ?array
     {
         $candidatePaths = [
             self::PRIMARY_REPORT_PATH,
@@ -118,7 +126,7 @@ class TestReport extends Component
                 ->timeout(10)
                 ->retry(1, 200)
                 ->get("{$apiUrl}/repos/{$owner}/{$repo}/contents/{$path}", [
-                    'ref' => self::REPORT_BRANCH,
+                    'ref' => $testBranch,
                 ]);
             if ($response->status() === 404) {
                 continue;

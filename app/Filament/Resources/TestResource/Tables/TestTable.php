@@ -30,6 +30,8 @@ class TestTable
                 'name',
                 'repo_name',
                 'repo_url',
+                'source_branch',
+                'test_branch',
                 'app_url',
                 'status',
                 'error',
@@ -55,6 +57,18 @@ class TestTable
                     ->copyable()
                     ->limit(50)
                     ->tooltip(fn(?string $state): ?string => $state),
+                \Filament\Tables\Columns\TextColumn::make('source_branch')
+                    ->label('Source Branch')
+                    ->badge()
+                    ->color('gray')
+                    ->sortable()
+                    ->searchable(),
+                \Filament\Tables\Columns\TextColumn::make('test_branch')
+                    ->label('Test Branch')
+                    ->badge()
+                    ->color('info')
+                    ->sortable()
+                    ->searchable(),
                 \Filament\Tables\Columns\TextColumn::make('app_url')
                     ->label('App URL')
                     ->toggleable(isToggledHiddenByDefault: true)
