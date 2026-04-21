@@ -44,7 +44,30 @@ class TestForm
                     ->label('Repository Name')
                     ->placeholder('Enter repository name')
                     ->required()
-                    ->unique(ignoreRecord: true)
+                    ->rule(function (callable $get, ?\App\Models\Test $record): \Closure {
+                        return function (string $attribute, mixed $value, \Closure $fail) use ($get, $record): void {
+                            $repoName = trim((string) $value);
+                            $sourceBranch = trim((string) ($get('source_branch') ?? ''));
+                            $testBranch = trim((string) ($get('test_branch') ?? ''));
+
+                            if ($repoName === '' || $sourceBranch === '' || $testBranch === '') {
+                                return;
+                            }
+
+                            $query = \App\Models\Test::query()
+                                ->where('repo_name', $repoName)
+                                ->where('source_branch', $sourceBranch)
+                                ->where('test_branch', $testBranch);
+
+                            if ($record?->exists) {
+                                $query->whereKeyNot($record->getKey());
+                            }
+
+                            if ($query->exists()) {
+                                $fail('A test for this repository, source branch, and test branch already exists.');
+                            }
+                        };
+                    })
                     ->maxLength(255),
                 \Filament\Forms\Components\Select::make('source_branch')
                     ->label('Source Branch')
@@ -77,12 +100,11 @@ class TestForm
                     ->live(),
                 \Filament\Forms\Components\TextInput::make('test_branch')
                     ->label('Test Branch')
-                    ->placeholder('playwright')
+                    ->placeholder('Enter test branch name')
                     ->required()
                     ->default('playwright')
-                    ->helperText('Set the target branch where generated tests and reports will be pushed.')
-                    ->rule(function (callable $get, \App\Services\GiteaService $giteaService): \Closure {
-                        return function (string $attribute, mixed $value, \Closure $fail) use ($get, $giteaService): void {
+                    ->rule(function (callable $get, \App\Services\GiteaService $giteaService, ?\App\Models\Test $record): \Closure {
+                        return function (string $attribute, mixed $value, \Closure $fail) use ($get, $giteaService, $record): void {
                             $branchName = trim((string) $value);
                             if ($branchName === '') {
                                 return;
@@ -90,6 +112,14 @@ class TestForm
 
                             $repoUrl = trim((string) ($get('repo_url') ?? ''));
                             if ($repoUrl === '') {
+                                return;
+                            }
+
+                            $isEditingOwnUnchangedBranch = $record?->exists
+                                && trim((string) $record->repo_url) === $repoUrl
+                                && trim((string) $record->test_branch) === $branchName;
+
+                            if ($isEditingOwnUnchangedBranch) {
                                 return;
                             }
 
@@ -105,7 +135,6 @@ class TestForm
                     ->placeholder('Enter App URL')
                     ->url()
                     ->required()
-                    ->default(config('app.url'))
                     ->maxLength(2048),
             ]);
     }

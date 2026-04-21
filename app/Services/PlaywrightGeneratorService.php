@@ -539,7 +539,14 @@ class PlaywrightGeneratorService
 
     private function buildWorkspacePaths(Test $test): array
     {
-        $storagePath = storage_path('app/latest-tests/' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $test->repo_name));
+        $workspaceKey = implode('-', array_filter([
+            'test-' . $test->id,
+            preg_replace('/[^a-zA-Z0-9_\-]/', '_', $test->repo_name),
+            preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string) $test->source_branch),
+            preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string) $test->test_branch),
+        ], fn(string $part): bool => $part !== ''));
+
+        $storagePath = storage_path('app/latest-tests/' . $workspaceKey);
 
         return [
             'storage' => $storagePath,

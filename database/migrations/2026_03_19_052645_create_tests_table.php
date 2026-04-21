@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('tests', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('repo_name')->unique();
+            $table->string('repo_name');
             $table->string('repo_url');
             $table->string('source_branch')->default('main');
             $table->string('test_branch')->default('playwright');
@@ -25,6 +25,8 @@ return new class extends Migration
             $table->timestamp('failed_at')->nullable();
             $table->timestamp('generated_at')->nullable()->index();
             $table->timestamps();
+
+            $table->unique(['repo_name', 'source_branch', 'test_branch'], 'tests_repo_name_source_branch_test_branch_unique');
         });
     }
 

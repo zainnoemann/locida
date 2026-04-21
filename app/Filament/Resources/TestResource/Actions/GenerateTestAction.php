@@ -23,15 +23,14 @@ class GenerateTestAction extends Action
         $this->label('Generate')
             ->icon('heroicon-o-play')
             ->color('success')
-            ->disabled(fn(Test $record): bool => $record->status === Test::STATUS_GENERATING)
-            ->visible(fn(): bool => Auth::check())
+            ->visible(fn(Test $record): bool => Auth::check() && $record->status !== Test::STATUS_FAILED)
             ->successRedirectUrl(fn(Test $record): string => TestResource::getUrl('generate', ['record' => $record]))
             ->action(function (Test $record): void {
                 if ($record->status === Test::STATUS_GENERATING) {
                     Notification::make()
-                        ->warning()
-                        ->title('Generation already in progress')
-                        ->body('Please wait until the current generation finishes.')
+                        ->info()
+                        ->title('Generation in progress')
+                        ->body('Opening the live process view.')
                         ->send();
 
                     return;

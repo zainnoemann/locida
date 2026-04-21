@@ -20,9 +20,9 @@ class RetryFailedTestAction extends Action
     {
         parent::setUp();
 
-        $this->label('Retry Failed')
+        $this->label('Retry')
             ->icon('heroicon-o-arrow-path')
-            ->color('warning')
+            ->color('info')
             ->requiresConfirmation()
             ->visible(fn(Test $record): bool => Auth::check() && $record->status === Test::STATUS_FAILED)
             ->successRedirectUrl(fn(Test $record): string => TestResource::getUrl('generate', ['record' => $record]))

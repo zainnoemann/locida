@@ -146,7 +146,7 @@ class TestTable
                     \Filament\Actions\BulkAction::make('retry_failed_bulk')
                         ->label('Retry Failed')
                         ->icon('heroicon-o-arrow-path')
-                        ->color('warning')
+                        ->color('info')
                         ->visible(fn(): bool => Auth::check())
                         ->requiresConfirmation()
                         ->action(function (Collection $records): void {
