@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\TestResource\Tables;
 
 use App\Filament\Resources\TestResource\Actions\GenerateTestAction;
-use App\Filament\Resources\TestResource\Actions\RetryFailedTestAction;
 use App\Filament\Resources\TestResource;
 use App\Jobs\GenerateTestJob;
 use App\Models\Test;
@@ -137,7 +136,6 @@ class TestTable
             ->emptyStateIcon('heroicon-o-beaker')
             ->recordActions([
                 GenerateTestAction::make(),
-                RetryFailedTestAction::make(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
@@ -146,7 +144,7 @@ class TestTable
                     \Filament\Actions\BulkAction::make('retry_failed_bulk')
                         ->label('Retry Failed')
                         ->icon('heroicon-o-arrow-path')
-                        ->color('info')
+                        ->color('warning')
                         ->visible(fn(): bool => Auth::check())
                         ->requiresConfirmation()
                         ->action(function (Collection $records): void {
