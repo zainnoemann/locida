@@ -4,7 +4,9 @@ namespace App\Livewire;
 
 use App\Models\Test;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\URL;
 use Livewire\Component;
 
 class TestReport extends Component
@@ -12,12 +14,20 @@ class TestReport extends Component
     public int $testId;
     public string $statusFilter = 'all';
     public string $keyword = '';
+    public string $renderMode = 'full';
     private const DEFAULT_TEST_BRANCH = 'playwright';
-    private const PRIMARY_REPORT_PATH = 'playwright/reports/report.json';
+    private const PRIMARY_REPORT_BASE_PATH = 'playwright/reports';
+    private const PRIMARY_HTML_REPORT_FILE = 'index.html';
+    private const PRIMARY_REPORT_JSON_FILE = 'report.json';
+    private const PRIMARY_REPORT_ASSET_DIRS = [
+        'data',
+        'trace',
+    ];
 
-    public function mount(int $testId)
+    public function mount(int $testId, string $renderMode = 'full')
     {
         $this->testId = $testId;
+        $this->renderMode = $renderMode;
         $this->statusFilter = 'all';
         $this->keyword = '';
     }
@@ -36,7 +46,7 @@ class TestReport extends Component
 
     public function getReportProperty(): array
     {
-        $test = Test::query()->select(['id', 'repo_name', 'test_branch'])->find($this->testId);
+        $test = Test::query()->select(['id', 'repo_name', 'repo_url', 'test_branch'])->find($this->testId);
         if ($test === null) {
             return [
                 'available' => false,
@@ -66,13 +76,18 @@ class TestReport extends Component
             return [
                 'available' => false,
                 'message' => 'Invalid repository name format. Expected owner/repo.',
+                'htmlReportUrl' => null,
             ];
         }
+        $htmlReportUrl = $this->cachePrimaryHtmlReportIndexAndGetUrl($test, $apiUrl, $apiToken, $owner, $repo, $testBranch);
+
         $json = $this->fetchReportJson($apiUrl, $apiToken, $owner, $repo, $testBranch);
         if (! is_array($json)) {
+            $primaryReportPath = $this->primaryReportPath(self::PRIMARY_REPORT_JSON_FILE);
             return [
                 'available' => false,
-                'message' => 'Report not found yet at ' . self::PRIMARY_REPORT_PATH . ' in branch ' . $testBranch . '.',
+                'message' => 'Report not found yet at ' . $primaryReportPath . ' in branch ' . $testBranch . '.',
+                'htmlReportUrl' => $htmlReportUrl,
             ];
         }
         $stats = is_array($json['stats'] ?? null) ? $json['stats'] : [];
@@ -85,6 +100,7 @@ class TestReport extends Component
             'branch' => $testBranch,
             'generatedAt' => $stats['startTime'] ?? null,
             'durationMs' => (int) ($stats['duration'] ?? 0),
+            'htmlReportUrl' => $htmlReportUrl,
             'stats' => [
                 'expected' => $expected,
                 'unexpected' => $unexpected,
@@ -115,32 +131,15 @@ class TestReport extends Component
     private function fetchReportJson(string $apiUrl, string $apiToken, string $owner, string $repo, string $testBranch): ?array
     {
         $candidatePaths = [
-            self::PRIMARY_REPORT_PATH,
+            $this->primaryReportPath(self::PRIMARY_REPORT_JSON_FILE),
             // backward compatibility with older generated workflows/branches
             'playwright/playwright-report/report.json',
             'playwright-report/report.json',
             'report.json',
         ];
         foreach ($candidatePaths as $path) {
-            $response = Http::withToken($apiToken)
-                ->timeout(10)
-                ->retry(1, 200)
-                ->get("{$apiUrl}/repos/{$owner}/{$repo}/contents/{$path}", [
-                    'ref' => $testBranch,
-                ]);
-            if ($response->status() === 404) {
-                continue;
-            }
-            if (! $response->successful()) {
-                continue;
-            }
-            $payload = $response->json();
-            $base64 = is_array($payload) ? (string) ($payload['content'] ?? '') : '';
-            if ($base64 === '') {
-                continue;
-            }
-            $decoded = base64_decode(str_replace(["\n", "\r"], '', $base64), true);
-            if ($decoded === false || $decoded === '') {
+            $decoded = $this->fetchRepositoryFileContent($apiUrl, $apiToken, $owner, $repo, $path, $testBranch);
+            if ($decoded === null) {
                 continue;
             }
             $json = json_decode($decoded, true);
@@ -149,6 +148,185 @@ class TestReport extends Component
             }
         }
         return null;
+    }
+
+    private function fetchRepositoryFileContent(string $apiUrl, string $apiToken, string $owner, string $repo, string $path, string $testBranch): ?string
+    {
+        $response = Http::withToken($apiToken)
+            ->timeout(10)
+            ->retry(1, 200)
+            ->get("{$apiUrl}/repos/{$owner}/{$repo}/contents/{$path}", [
+                'ref' => $testBranch,
+            ]);
+
+        if ($response->status() === 404 || ! $response->successful()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        $base64 = is_array($payload) ? (string) ($payload['content'] ?? '') : '';
+        if ($base64 === '') {
+            return null;
+        }
+
+        $decoded = base64_decode(str_replace(["\n", "\r"], '', $base64), true);
+        if ($decoded === false || $decoded === '') {
+            return null;
+        }
+
+        return $decoded;
+    }
+
+    private function cachePrimaryHtmlReportIndexAndGetUrl(Test $test, string $apiUrl, string $apiToken, string $owner, string $repo, string $testBranch): ?string
+    {
+        $primaryHtmlPath = $this->primaryReportPath(self::PRIMARY_HTML_REPORT_FILE);
+        $html = $this->fetchRepositoryFileContent(
+            $apiUrl,
+            $apiToken,
+            $owner,
+            $repo,
+            $primaryHtmlPath,
+            $testBranch
+        );
+
+        if ($html === null || trim($html) === '') {
+            return $this->buildStoredHtmlReportUrlIfExists($test->id);
+        }
+
+        $directory = $this->storedHtmlReportBaseDirectory($test->id);
+        if (! File::exists($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+        File::put($this->storedHtmlReportFilePath($test->id), $html);
+
+        foreach (self::PRIMARY_REPORT_ASSET_DIRS as $remoteAssetDir) {
+            $relativeAssetDir = trim($remoteAssetDir, '/');
+            $remoteAssetPath = $this->primaryReportPath($relativeAssetDir);
+
+            $localAssetDir = $directory . '/' . $relativeAssetDir;
+            if (File::exists($localAssetDir)) {
+                File::deleteDirectory($localAssetDir);
+            }
+
+            $this->syncRepositoryDirectoryToLocal(
+                $apiUrl,
+                $apiToken,
+                $owner,
+                $repo,
+                $testBranch,
+                $remoteAssetPath,
+                $localAssetDir
+            );
+        }
+
+        return URL::temporarySignedRoute('playwright-reports.index', now()->addMinutes(30), [
+            'test' => $test->id,
+        ]);
+    }
+
+    private function syncRepositoryDirectoryToLocal(
+        string $apiUrl,
+        string $apiToken,
+        string $owner,
+        string $repo,
+        string $testBranch,
+        string $remoteDirectoryPath,
+        string $localDirectoryPath
+    ): void {
+        $response = Http::withToken($apiToken)
+            ->timeout(10)
+            ->retry(1, 200)
+            ->get("{$apiUrl}/repos/{$owner}/{$repo}/contents/{$remoteDirectoryPath}", [
+                'ref' => $testBranch,
+            ]);
+
+        if ($response->status() === 404 || ! $response->successful()) {
+            return;
+        }
+
+        $entries = $response->json();
+        if (! is_array($entries)) {
+            return;
+        }
+
+        if (! File::exists($localDirectoryPath)) {
+            File::makeDirectory($localDirectoryPath, 0755, true);
+        }
+
+        foreach ($entries as $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $type = strtolower((string) ($entry['type'] ?? ''));
+            $entryPath = (string) ($entry['path'] ?? '');
+            $entryName = (string) ($entry['name'] ?? '');
+            if ($entryPath === '' || $entryName === '') {
+                continue;
+            }
+
+            if ($type === 'dir') {
+                $this->syncRepositoryDirectoryToLocal(
+                    $apiUrl,
+                    $apiToken,
+                    $owner,
+                    $repo,
+                    $testBranch,
+                    $entryPath,
+                    $localDirectoryPath . '/' . $entryName
+                );
+                continue;
+            }
+
+            if ($type !== 'file') {
+                continue;
+            }
+
+            $content = $this->fetchRepositoryFileContent($apiUrl, $apiToken, $owner, $repo, $entryPath, $testBranch);
+            if ($content === null) {
+                continue;
+            }
+
+            File::put($localDirectoryPath . '/' . $entryName, $content);
+        }
+    }
+
+    private function storedHtmlReportBaseDirectory(int $testId): string
+    {
+        return storage_path("app/playwright/test-{$testId}/reports");
+    }
+
+    private function storedHtmlReportDirectory(int $testId): string
+    {
+        return $this->storedHtmlReportBaseDirectory($testId);
+    }
+
+    private function storedHtmlReportFilePath(int $testId): string
+    {
+        return $this->storedHtmlReportDirectory($testId) . '/index.html';
+    }
+
+    private function primaryReportPath(string $relativePath): string
+    {
+        $basePath = trim(self::PRIMARY_REPORT_BASE_PATH, '/');
+        $relativePath = ltrim($relativePath, '/');
+
+        if ($relativePath === '') {
+            return $basePath;
+        }
+
+        return $basePath . '/' . $relativePath;
+    }
+
+    private function buildStoredHtmlReportUrlIfExists(int $testId): ?string
+    {
+        if (! File::exists($this->storedHtmlReportFilePath($testId))) {
+            return null;
+        }
+
+        return URL::temporarySignedRoute('playwright-reports.index', now()->addMinutes(30), [
+            'test' => $testId,
+        ]);
     }
 
     private function extractSpecs(array $report): array

@@ -1,6 +1,7 @@
 <div wire:poll.1s>
     @php
     $report = $this->report;
+    $isLinkMode = $this->renderMode === 'link';
     $stats = $report['stats'] ?? ['expected' => 0, 'unexpected' => 0, 'flaky' => 0, 'skipped' => 0, 'total' => 0];
     $specs = $report['specs'] ?? [];
     $filteredSpecs = $this->filterSpecs($specs);
@@ -14,6 +15,18 @@
     'skipped' => ['label' => 'Skipped', 'count' => $stats['skipped']],
     ];
     @endphp
+
+    @if ($isLinkMode)
+    @if (! empty($report['htmlReportUrl']))
+    <a
+        href="{{ $report['htmlReportUrl'] }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:border-primary-700/60 dark:bg-primary-900/30 dark:text-primary-200 dark:hover:bg-primary-900/50">
+        View HTML Report
+    </a>
+    @endif
+    @else
 
     @if (! $report['available'])
     <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
@@ -111,5 +124,6 @@
         </div>
         @endif
     </div>
+    @endif
     @endif
 </div>
