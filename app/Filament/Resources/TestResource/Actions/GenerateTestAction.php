@@ -25,13 +25,15 @@ class GenerateTestAction extends Action
             ->color('success')
             ->visible(fn(Test $record): bool => Auth::check())
             ->requiresConfirmation(fn(Test $record): bool => $record->status === Test::STATUS_FAILED)
-            ->modalHeading(fn(Test $record): string => $record->status === Test::STATUS_FAILED
+            ->modalHeading(fn(Test $record): ?string => $record->status === Test::STATUS_FAILED
                 ? 'Failed test action'
-                : 'Generate test')
-            ->modalSubmitActionLabel(fn(Test $record): string => $record->status === Test::STATUS_FAILED
+                : null)
+            ->modalSubmitActionLabel(fn(Test $record): ?string => $record->status === Test::STATUS_FAILED
                 ? 'View'
-                : 'Generate')
-            ->modalCancelActionLabel('Cancel')
+                : null)
+            ->modalCancelActionLabel(fn(Test $record): ?string => $record->status === Test::STATUS_FAILED
+                ? 'Cancel'
+                : null)
             ->extraModalFooterActions(fn(Action $action): array => $action->getRecord()?->status === Test::STATUS_FAILED
                 ? [
                     $action->makeModalSubmitAction('retry', arguments: ['failed_action' => 'retry'])
@@ -51,7 +53,7 @@ class GenerateTestAction extends Action
                     return;
                 }
 
-                if ($record->status === Test::STATUS_COMPLETED) {
+                if (in_array($record->status, [Test::STATUS_COMPLETED, 'complete'], true)) {
                     Notification::make()
                         ->success()
                         ->title('Opening generation log')
