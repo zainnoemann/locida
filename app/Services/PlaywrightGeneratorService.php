@@ -498,7 +498,7 @@ class PlaywrightGeneratorService
 
             $runId = (int) ($run['id'] ?? 0);
             if ($runId > 0 && $trackedRunId === null) {
-                File::append($logFile, "\nStarting Playwright tests on Gitea Actions run #{$runId}.\n");
+                File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Starting Playwright tests on Gitea Actions run #{$runId}.\n");
             }
             if ($runId > 0) {
                 $trackedRunId = $runId;
@@ -565,7 +565,7 @@ class PlaywrightGeneratorService
             File::makeDirectory($logDir, 0755, true);
         }
 
-        File::put($logFile, "Starting generator process for {$test->name}...\n");
+        File::put($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Starting generator process for {$test->name}...\n");
 
         return $logFile;
     }
@@ -610,7 +610,7 @@ class PlaywrightGeneratorService
 
     private function cloneSourceRepository(Test $test, string $logFile, string $gitUrl, string $cloneDir, string $sourceBranch): bool
     {
-        $this->appendLog($logFile, "Cloning source from {$test->repo_url} (branch: {$sourceBranch})...\n");
+        $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Cloning source from {$test->repo_url} (branch: {$sourceBranch})...\n");
 
         $cloneProcess = Process::run(
             'git clone --branch ' . escapeshellarg($sourceBranch)
@@ -647,7 +647,7 @@ class PlaywrightGeneratorService
             . ' --gitea-app-host ' . escapeshellarg($giteaAppHost)
             . ' --gitea-branch ' . escapeshellarg($testBranch);
 
-        $this->appendLog($logFile, "\nRunning Playwright Generator: {$command}\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Running Playwright Generator: {$command}\n");
 
         $genProcess = Process::path($generatorPath)
             ->run($command, function (string $type, string $output) use ($logFile) {
@@ -712,7 +712,7 @@ class PlaywrightGeneratorService
 
     private function pushPlaywrightBranch(Test $test, string $logFile, string $outputDir, string $gitUrl, string $gitIdentityName, string $gitIdentityEmail, string $testBranch): bool
     {
-        $this->appendLog($logFile, "\nCommitting and pushing generated tests to Gitea branch {$testBranch}...\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing generated tests to Gitea branch {$testBranch}...\n");
 
         $gitCommands = [
             'git config --global --add safe.directory ' . escapeshellarg($outputDir),
@@ -769,7 +769,8 @@ class PlaywrightGeneratorService
 
     private function markTestCompleted(Test $test, string $logFile): void
     {
-        $this->appendLog($logFile, "\nDone.\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Playwright report available on Gitea Actions.\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Done.\n");
 
         $test->update([
             'status' => Test::STATUS_COMPLETED,

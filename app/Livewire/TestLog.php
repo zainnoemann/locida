@@ -17,8 +17,8 @@ class TestLog extends Component
         ['key' => 'start', 'label' => 'Start', 'marker' => 'Starting generator process'],
         ['key' => 'clone', 'label' => 'Clone Source', 'marker' => 'Cloning source'],
         ['key' => 'generate', 'label' => 'Generate Tests', 'marker' => 'Running Playwright Generator'],
-        ['key' => 'push', 'label' => 'Push Branch', 'marker' => 'Committing and pushing generated tests to Gitea'],
-        ['key' => 'test', 'label' => 'Playwright Tests', 'marker' => 'Playwright tests on Gitea Actions'],
+        ['key' => 'test', 'label' => 'Playwright Tests', 'marker' => 'Committing and pushing generated tests to Gitea'],
+        ['key' => 'report', 'label' => 'Playwright Report', 'marker' => 'Playwright report available on Gitea Actions'],
         ['key' => 'done', 'label' => 'Completed', 'marker' => 'Done.'],
     ];
 
@@ -157,9 +157,56 @@ class TestLog extends Component
             }
         }
 
+        $stageTimestamps = [];
+        foreach (self::TIMELINE_STAGES as $s) {
+            $marker = preg_quote($s['marker'], '/');
+            if (preg_match('/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\][^\n]*?' . $marker . '/', $logs, $matches)) {
+                $stageTimestamps[$s['key']] = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $matches[1]);
+            }
+        }
+
+        for ($i = 0; $i < count($stages); $i++) {
+            $currentKey = $stages[$i]['key'];
+            $nextKey = $stages[$i + 1]['key'] ?? null;
+            $start = $stageTimestamps[$currentKey] ?? null;
+            $end = $stageTimestamps[$nextKey] ?? null;
+            $durationStr = '';
+            if ($start) {
+                if ($end) {
+                    $duration = max(0, $start->diffInSeconds($end));
+                } elseif ($stages[$i]['status'] === 'active') {
+                    $duration = max(0, $start->diffInSeconds(now()));
+                } elseif ($stages[$i]['status'] === 'failed') {
+                    $logFile = storage_path("app/generator-logs/test-{$this->testId}.log");
+                    if (File::exists($logFile)) {
+                        $duration = max(0, $start->diffInSeconds(\Carbon\Carbon::createFromTimestamp(File::lastModified($logFile))));
+                    } else {
+                        $duration = null;
+                    }
+                } else {
+                    $duration = null;
+                }
+
+                if ($duration !== null) {
+                    if ($duration >= 60) {
+                        $m = floor($duration / 60);
+                        $s = $duration % 60;
+                        $durationStr = "{$m}m {$s}s";
+                    } else {
+                        $durationStr = "{$duration}s";
+                    }
+                }
+            }
+            $stages[$i]['duration'] = $durationStr;
+        }
+
+        $filteredStages = array_values(array_filter($stages, function($s) {
+            return !in_array($s['key'], ['start', 'done']);
+        }));
+
         return [
             'isWaiting' => false,
-            'stages' => $stages,
+            'stages' => $filteredStages,
         ];
     }
 

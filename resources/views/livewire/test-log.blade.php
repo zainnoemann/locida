@@ -37,7 +37,7 @@
         @endif
 
         <style>
-            .tl-container { min-width: 800px; height: 140px; position: relative; display: flex; align-items: flex-start; justify-content: space-between; padding: 2.5rem 4rem 0 4rem; }
+            .tl-container { width: 100%; height: 160px; position: relative; display: flex; align-items: flex-start; justify-content: space-between; padding: 2.5rem 6rem 0 6rem; }
             .tl-node-wrap { position: relative; display: flex; flex-direction: column; align-items: center; z-index: 10; width: 0; }
             
             .tl-line-segment { flex-grow: 1; height: 4px; transform: translateY(-2px); z-index: 0; margin-top: 2.5rem; }
@@ -56,7 +56,7 @@
             .bg-rose-c { background-color: #e11d48; } .text-rose-c { color: #fb7185; }
         </style>
 
-        <div class="w-full overflow-x-auto pb-4 pt-4 custom-scrollbar">
+        <div class="w-full overflow-hidden pb-4 pt-4">
             <div class="tl-container">
                 @foreach ($stages as $index => $stage)
                 @php
@@ -79,6 +79,9 @@
                     </div>
                     <div class="tl-content">
                         <p class="tl-title {{ $textClass }}">{{ $stage['label'] }}</p>
+                        @if(!empty($stage['duration']))
+                            <p class="text-xs {{ $textClass }} opacity-80 font-medium">{{ $stage['duration'] }}</p>
+                        @endif
                     </div>
                 </div>
 
