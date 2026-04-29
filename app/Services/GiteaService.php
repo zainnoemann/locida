@@ -8,13 +8,49 @@ use Illuminate\Support\Facades\Log;
 
 class GiteaService
 {
+    protected string $rootUrl;
     protected string $apiUrl;
     protected string $apiToken;
 
     public function __construct()
     {
+        $this->rootUrl = (string) config('services.gitea.root_url');    
         $this->apiUrl = (string) config('services.gitea.url');
         $this->apiToken = (string) config('services.gitea.token');
+    }
+
+    /**
+     * Fetch Gitea version.
+     *
+     * @return string|null
+     */
+    public function getVersion(): ?string
+    {
+        if (empty($this->rootUrl)) {
+            return null;
+        }
+
+        return Cache::remember('gitea.version', now()->addHours(1), function (): ?string {
+            try {
+                $response = Http::timeout(10)
+                    ->retry(2, 200)
+                    ->get(rtrim($this->rootUrl, '/') . '/api/v1/version');
+
+                if (! $response->successful()) {
+                    return null;
+                }
+
+                $version = $response->json('version');
+
+                return is_string($version) && $version !== '' ? $version : null;
+            } catch (
+                Throwable $e
+            ) {
+                Log::warning('Exception while fetching Gitea version.', ['message' => $e->getMessage()]);
+
+                return null;
+            }
+        });
     }
 
     /**

@@ -66,6 +66,7 @@ http://localhost:3000
 5. Put required env values in `.env`:
 
 ```dotenv
+GITEA_ROOT_URL=
 GITEA_API_URL=http://gitea:3000/api/v1
 GITEA_API_TOKEN=<your_pat>
 GITEA_RUNNER_REGISTRATION_TOKEN=<runner_registration_token>
@@ -82,7 +83,7 @@ docker compose up -d --force-recreate act-runner
 When opening `http://localhost:3000` for the first time:
 
 - Keep most defaults from Gitea installer unless you have custom needs.
-- Make sure the final `ROOT_URL` is `http://localhost:3000/` for local usage.
+- Set `ROOT_URL` to the URL you actually use.
 - After install, log in and create your first repository.
 
 Optional local clone examples:
@@ -119,6 +120,7 @@ Variables used by the Laravel app and runner integration:
 
 | Variable | Description | Example |
 | --- | --- | --- |
+| `GITEA_ROOT_URL` | Canonical base URL used by Gitea for links and notifications | `<URL>` |
 | `GITEA_API_URL` | Gitea API base URL for app integration | `http://gitea:3000/api/v1` |
 | `GITEA_API_TOKEN` | Personal access token for API calls | `<PAT>` |
 | `GITEA_RUNNER_REGISTRATION_TOKEN` | Token used by `act-runner` auto-registration | `<registration_token>` |
