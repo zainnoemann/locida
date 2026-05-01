@@ -92,7 +92,7 @@ class GiteaService
      *
      * @return array<int, string>
      */
-    public function getBranchesByCloneUrl(string $cloneUrl): array
+    public function getBranchesByCloneUrl(string $cloneUrl, bool $useCache = true): array
     {
         $repo = collect($this->getRepositories())
             ->first(fn($item) => is_array($item) && ($item['clone_url'] ?? null) === $cloneUrl);
@@ -108,7 +108,7 @@ class GiteaService
             return [];
         }
 
-        return $this->getBranches($owner, $name);
+        return $this->getBranches($owner, $name, $useCache);
     }
 
     /**
@@ -116,50 +116,64 @@ class GiteaService
      *
      * @return array<int, string>
      */
-    public function getBranches(string $owner, string $repo): array
+    public function getBranches(string $owner, string $repo, bool $useCache = true): array
     {
         if (empty($this->apiUrl) || empty($this->apiToken)) {
             return [];
         }
 
+        if (! $useCache) {
+            return $this->fetchBranches($owner, $repo);
+        }
+
         $cacheKey = sprintf('gitea.branches.%s.%s', $owner, $repo);
 
         return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($owner, $repo): array {
-            try {
-                $response = Http::withToken($this->apiToken)
-                    ->timeout(10)
-                    ->retry(2, 200)
-                    ->get(rtrim($this->apiUrl, '/') . "/repos/{$owner}/{$repo}/branches");
+            return $this->fetchBranches($owner, $repo);
+        });
+    }
 
-                if (! $response->successful()) {
-                    Log::error('Failed to fetch Gitea branches.', [
-                        'owner' => $owner,
-                        'repo' => $repo,
-                        'status' => $response->status(),
-                    ]);
+    /**
+     * Fetch repository branches from Gitea API without cache.
+     *
+     * @return array<int, string>
+     */
+    protected function fetchBranches(string $owner, string $repo): array
+    {
+        try {
+            $response = Http::withToken($this->apiToken)
+                ->timeout(10)
+                ->retry(2, 200)
+                ->get(rtrim($this->apiUrl, '/') . "/repos/{$owner}/{$repo}/branches");
 
-                    return [];
-                }
-
-                $branches = $response->json();
-
-                if (! is_array($branches)) {
-                    return [];
-                }
-
-                return array_values(array_filter(array_map(
-                    fn($branch) => is_array($branch) ? ($branch['name'] ?? null) : null,
-                    $branches
-                )));
-            } catch (\Throwable $e) {
-                Log::error('Exception while fetching Gitea branches.', [
+            if (! $response->successful()) {
+                Log::error('Failed to fetch Gitea branches.', [
                     'owner' => $owner,
                     'repo' => $repo,
-                    'message' => $e->getMessage(),
+                    'status' => $response->status(),
                 ]);
 
                 return [];
             }
-        });
+
+            $branches = $response->json();
+
+            if (! is_array($branches)) {
+                return [];
+            }
+
+            return array_values(array_filter(array_map(
+                fn($branch) => is_array($branch) ? ($branch['name'] ?? null) : null,
+                $branches
+            )));
+        } catch (\Throwable $e) {
+            Log::error('Exception while fetching Gitea branches.', [
+                'owner' => $owner,
+                'repo' => $repo,
+                'message' => $e->getMessage(),
+            ]);
+
+            return [];
+        }
     }
 }

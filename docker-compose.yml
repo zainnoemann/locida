@@ -18,6 +18,8 @@ services:
                 condition: service_healthy
         networks:
             - locida
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
 
     queue:
         image: locida:latest
@@ -39,6 +41,8 @@ services:
                 condition: service_healthy
         networks:
             - locida
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
 
     nginx:
         image: nginx:1.27-alpine

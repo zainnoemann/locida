@@ -123,7 +123,7 @@ class TestForm
                                 return;
                             }
 
-                            $existingBranches = $giteaService->getBranchesByCloneUrl($repoUrl);
+                            $existingBranches = $giteaService->getBranchesByCloneUrl($repoUrl, false);
                             if (in_array($branchName, $existingBranches, true)) {
                                 $fail('Test branch already exists in the repository. Please use a different branch name.');
                             }

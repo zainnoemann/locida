@@ -110,6 +110,41 @@ class PlaywrightGeneratorService
         return $host . ':' . $port;
     }
 
+    private function validateTargetUrl(string $targetUrl): ?string
+    {
+        if (! filter_var($targetUrl, FILTER_VALIDATE_URL)) {
+            return 'App URL is invalid.';
+        }
+
+        try {
+            $headResponse = Http::timeout(10)
+                ->retry(1, 200)
+                ->withOptions(['allow_redirects' => true])
+                ->head($targetUrl);
+
+            if ($headResponse->successful()) {
+                return null;
+            }
+
+            if (in_array($headResponse->status(), [405, 501], true)) {
+                $getResponse = Http::timeout(10)
+                    ->retry(1, 200)
+                    ->withOptions(['allow_redirects' => true])
+                    ->get($targetUrl);
+
+                if ($getResponse->successful()) {
+                    return null;
+                }
+
+                return "App URL cannot be accessed (HTTP {$getResponse->status()}).";
+            }
+
+            return "App URL cannot be accessed (HTTP {$headResponse->status()}).";
+        } catch (\Throwable $exception) {
+            return 'App URL cannot be accessed (' . $exception->getMessage() . ').';
+        }
+    }
+
     private function parseRepoFullName(string $fullName): array
     {
         $parts = explode('/', trim($fullName), 2);
@@ -809,6 +844,15 @@ class PlaywrightGeneratorService
             $testBranch = $this->resolveTestBranch($test);
             $targetUrl = $this->resolveTargetUrl($test->app_url);
             $giteaAppHost = $this->resolveGiteaAppHost($targetUrl);
+
+            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Validating App URL accessibility: {$targetUrl}\n");
+            $targetUrlValidationError = $this->validateTargetUrl($targetUrl);
+            if ($targetUrlValidationError !== null) {
+                $this->markTestFailed($test, $logFile, $targetUrlValidationError, 'App URL Validation Error');
+
+                return;
+            }
+            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] App URL validation passed.\n");
 
             // Map localhost to internal Gitea container when running in Docker.
             $cloneUrl = str_replace(['localhost:3000', '127.0.0.1:3000'], 'gitea:3000', $cloneUrl);
