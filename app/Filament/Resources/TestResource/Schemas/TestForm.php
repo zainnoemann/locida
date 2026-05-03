@@ -135,6 +135,78 @@ class TestForm
                     ->placeholder('Enter App URL')
                     ->url()
                     ->required()
+                    ->rule(function (): \Closure {
+                        return function (string $attribute, mixed $value, \Closure $fail): void {
+                            $candidate = trim((string) $value);
+                            if ($candidate === '') {
+                                return;
+                            }
+
+                            if (! str_starts_with($candidate, 'http://') && ! str_starts_with($candidate, 'https://')) {
+                                $candidate = 'http://' . ltrim($candidate, '/');
+                            }
+
+                            $parsed = parse_url($candidate);
+                            if ($parsed !== false && ! empty($parsed['host'])) {
+                                $host = (string) $parsed['host'];
+                                if (in_array($host, ['localhost', '127.0.0.1', '0.0.0.0'], true)) {
+                                    $host = 'host.docker.internal';
+                                }
+
+                                $scheme = $parsed['scheme'] ?? 'http';
+                                $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+                                $path = $parsed['path'] ?? '';
+                                $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
+                                $fragment = isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '';
+
+                                $candidate = rtrim($scheme . '://' . $host . $port . $path . $query . $fragment, '/');
+                            }
+
+                            if (! filter_var($candidate, FILTER_VALIDATE_URL)) {
+                                $fail('App URL is invalid.');
+
+                                return;
+                            }
+
+                            try {
+                                $headResponse = \Illuminate\Support\Facades\Http::timeout(10)
+                                    ->retry(1, 200)
+                                    ->withOptions(['allow_redirects' => true])
+                                    ->head($candidate);
+
+                                if ($headResponse->successful()) {
+                                    return;
+                                }
+
+                                if (in_array($headResponse->status(), [405, 501], true)) {
+                                    $getResponse = \Illuminate\Support\Facades\Http::timeout(10)
+                                        ->retry(1, 200)
+                                        ->withOptions(['allow_redirects' => true])
+                                        ->get($candidate);
+
+                                    if ($getResponse->successful()) {
+                                        return;
+                                    }
+
+                                    $fail("App URL is unreachable (HTTP {$getResponse->status()}).");
+
+                                    return;
+                                }
+
+                                $fail("App URL is unreachable (HTTP {$headResponse->status()}).");
+                            } catch (\Throwable $exception) {
+                                $message = strtolower($exception->getMessage());
+
+                                if (str_contains($message, 'curl error 28') || str_contains($message, 'timed out')) {
+                                    $fail('App URL timed out.');
+
+                                    return;
+                                }
+
+                                $fail('App URL is unreachable.');
+                            }
+                        };
+                    })
                     ->maxLength(2048),
             ]);
     }

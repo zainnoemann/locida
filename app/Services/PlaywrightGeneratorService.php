@@ -136,12 +136,18 @@ class PlaywrightGeneratorService
                     return null;
                 }
 
-                return "App URL cannot be accessed (HTTP {$getResponse->status()}).";
+                return "App URL is unreachable (HTTP {$getResponse->status()}).";
             }
 
-            return "App URL cannot be accessed (HTTP {$headResponse->status()}).";
+            return "App URL is unreachable (HTTP {$headResponse->status()}).";
         } catch (\Throwable $exception) {
-            return 'App URL cannot be accessed (' . $exception->getMessage() . ').';
+            $message = strtolower($exception->getMessage());
+
+            if (str_contains($message, 'curl error 28') || str_contains($message, 'timed out')) {
+                return 'App URL timed out.';
+            }
+
+            return 'App URL is unreachable.';
         }
     }
 
