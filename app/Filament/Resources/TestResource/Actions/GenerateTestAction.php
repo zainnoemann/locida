@@ -5,6 +5,7 @@ namespace App\Filament\Resources\TestResource\Actions;
 use App\Filament\Resources\TestResource;
 use App\Jobs\GenerateTestJob;
 use App\Models\Test;
+use App\Services\PlaywrightGeneratorService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
@@ -20,34 +21,71 @@ class GenerateTestAction extends Action
     {
         parent::setUp();
 
-        $this->label('Generate')
-            ->icon('heroicon-o-play')
-            ->color('success')
-            ->visible(fn(Test $record): bool => Auth::check())
-            ->requiresConfirmation(fn(Test $record): bool => $record->status === Test::STATUS_FAILED)
-            ->modalHeading(fn(Test $record): ?string => $record->status === Test::STATUS_FAILED
-                ? 'Failed test action'
-                : null)
-            ->modalSubmitActionLabel(fn(Test $record): ?string => $record->status === Test::STATUS_FAILED
-                ? 'View'
-                : null)
-            ->modalCancelActionLabel(fn(Test $record): ?string => $record->status === Test::STATUS_FAILED
+        $this->label(fn(Test $record): string => $record->status === Test::STATUS_GENERATING
                 ? 'Cancel'
-                : null)
-            ->extraModalFooterActions(fn(Action $action): array => $action->getRecord()?->status === Test::STATUS_FAILED
-                ? [
+                : 'Generate')
+            ->icon(fn(Test $record): string => $record->status === Test::STATUS_GENERATING
+                ? 'heroicon-m-x-circle'
+                : 'heroicon-o-play')
+            ->color(fn(Test $record): string => $record->status === Test::STATUS_GENERATING
+                ? 'danger'
+                : 'success')
+            ->visible(fn(Test $record): bool => Auth::check())
+            ->requiresConfirmation(fn(Test $record): bool => in_array($record->status, [Test::STATUS_FAILED, Test::STATUS_GENERATING], true))
+            ->modalHeading(fn(Test $record): ?string => match ($record->status) {
+                Test::STATUS_FAILED => 'Failed test action',
+                Test::STATUS_GENERATING => 'Generation in progress',
+                default => null,
+            })
+            ->modalSubmitAction(fn(Action $action): Action => $action
+                ->label('View')
+                ->color('success'))
+            ->modalCancelAction(fn(Action $action): Action => $action->hidden())
+            ->extraModalFooterActions(fn(Action $action): array => match ($action->getRecord()?->status) {
+                Test::STATUS_FAILED => [
                     $action->makeModalSubmitAction('retry', arguments: ['failed_action' => 'retry'])
                         ->label('Retry')
                         ->color('warning'),
-                ]
-                : [])
+                ],
+                Test::STATUS_GENERATING => [
+                    $action->makeModalSubmitAction('cancel_execution', arguments: ['generation_action' => 'cancel'])
+                        ->label('Cancel')
+                        ->color('danger'),
+                ],
+                default => [],
+            })
             ->successRedirectUrl(fn(Test $record): string => TestResource::getUrl('generate', ['record' => $record]))
             ->action(function (Test $record, array $arguments): void {
                 if ($record->status === Test::STATUS_GENERATING) {
+                    $selectedAction = (string) ($arguments['generation_action'] ?? 'view');
+
+                    if ($selectedAction === 'cancel') {
+                        if (app(PlaywrightGeneratorService::class)->cancelGeneration($record)) {
+                            $record->refresh();
+
+                            Notification::make()
+                                ->warning()
+                                ->title('Generation cancelled')
+                                ->body('The current test generation has been stopped.')
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->info()
+                            ->title('Generation already stopped')
+                            ->body('The test is no longer generating.')
+                            ->send();
+
+                        return;
+                    }
+
+                    // View log
                     Notification::make()
-                        ->info()
-                        ->title('Generation in progress')
-                        ->body('Opening the live process view.')
+                        ->warning()
+                        ->title('Opening generation log')
+                        ->body('Displaying the live process view.')
                         ->send();
 
                     return;
@@ -68,6 +106,7 @@ class GenerateTestAction extends Action
 
                     if ($selectedAction === 'retry') {
                         GenerateTestJob::dispatch($record);
+                        $record->refresh();
 
                         Notification::make()
                             ->success()
@@ -78,6 +117,7 @@ class GenerateTestAction extends Action
                         return;
                     }
 
+                    // View log
                     Notification::make()
                         ->warning()
                         ->title('Opening generation log')
@@ -88,6 +128,7 @@ class GenerateTestAction extends Action
                 }
 
                 GenerateTestJob::dispatch($record);
+                $record->refresh();
 
                 Notification::make()
                     ->success()

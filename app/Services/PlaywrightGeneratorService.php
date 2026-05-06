@@ -23,6 +23,39 @@ class PlaywrightGeneratorService
         'tsconfig.json',
     ];
 
+    public function cancelGeneration(Test $test): bool
+    {
+        $test->refresh();
+
+        if ($test->status !== Test::STATUS_GENERATING) {
+            return false;
+        }
+
+        $logFile = storage_path("app/generator-logs/test-{$test->id}.log");
+        $logDir = dirname($logFile);
+
+        if (! File::exists($logDir)) {
+            File::makeDirectory($logDir, 0755, true);
+        }
+
+        File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Generation cancelled by user.\n");
+
+        $test->update([
+            'status' => Test::STATUS_CANCELLED,
+            'failed_at' => null,
+            'error' => 'Generation cancelled by user.',
+        ]);
+
+        return true;
+    }
+
+    private function isGenerationCancelled(Test $test): bool
+    {
+        $test->refresh();
+
+        return $test->status === Test::STATUS_CANCELLED;
+    }
+
     private function normalizeRuntimeHost(string $host): string
     {
         if (in_array($host, ['localhost', '127.0.0.1', '0.0.0.0'], true)) {
@@ -491,7 +524,7 @@ class PlaywrightGeneratorService
         }
     }
 
-    private function waitForPlaywrightActions(string $logFile, string $repoFullName, string $testBranch, string $headSha): array
+    private function waitForPlaywrightActions(string $logFile, string $repoFullName, string $testBranch, string $headSha, Test $test): array
     {
         $apiUrl = rtrim((string) config('services.gitea.url'), '/');
         $apiToken = (string) config('services.gitea.token');
@@ -511,6 +544,10 @@ class PlaywrightGeneratorService
         $jobLogState = [];
 
         while (time() <= $deadline) {
+            if ($this->isGenerationCancelled($test)) {
+                return ['ok' => false, 'cancelled' => true, 'error' => 'Generation cancelled by user.'];
+            }
+
             $run = null;
             if ($trackedRunId !== null) {
                 $run = $this->fetchActionRunById($apiUrl, $apiToken, $owner, $repo, $trackedRunId);
@@ -839,9 +876,17 @@ class PlaywrightGeneratorService
 
         $logFile = $this->initializeLogFile($test);
 
+        if ($this->isGenerationCancelled($test)) {
+            return;
+        }
+
         try {
             $paths = $this->buildWorkspacePaths($test);
             $this->prepareWorkspaceDirectories($paths);
+
+            if ($this->isGenerationCancelled($test)) {
+                return;
+            }
 
             $cloneUrl = $test->repo_url;
             $giteaToken = (string) config('services.gitea.token');
@@ -854,35 +899,75 @@ class PlaywrightGeneratorService
             $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Validating App URL accessibility: {$targetUrl}\n");
             $targetUrlValidationError = $this->validateTargetUrl($targetUrl);
             if ($targetUrlValidationError !== null) {
+                if ($this->isGenerationCancelled($test)) {
+                    return;
+                }
+
                 $this->markTestFailed($test, $logFile, $targetUrlValidationError, 'App URL Validation Error');
 
                 return;
             }
             $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] App URL validation passed.\n");
 
+            if ($this->isGenerationCancelled($test)) {
+                return;
+            }
+
             // Map localhost to internal Gitea container when running in Docker.
             $cloneUrl = str_replace(['localhost:3000', '127.0.0.1:3000'], 'gitea:3000', $cloneUrl);
             $gitUrl = $this->buildAuthenticatedGitUrl($cloneUrl, $giteaToken, $test->repo_name);
 
             if (! $this->cloneSourceRepository($test, $logFile, $gitUrl, $paths['clone'], $sourceBranch)) {
+                if ($this->isGenerationCancelled($test)) {
+                    return;
+                }
+
+                return;
+            }
+
+            if ($this->isGenerationCancelled($test)) {
                 return;
             }
 
             if (! $this->runPlaywrightGenerator($test, $logFile, $paths['clone'], $paths['generated'], $targetUrl, $giteaAppHost, $testBranch)) {
+                if ($this->isGenerationCancelled($test)) {
+                    return;
+                }
+
+                return;
+            }
+
+            if ($this->isGenerationCancelled($test)) {
                 return;
             }
 
             $this->prepareOutputRepository($paths['clone'], $paths['output']);
             $this->publishGeneratedArtifacts($paths['generated'], $paths['output']);
 
+            if ($this->isGenerationCancelled($test)) {
+                return;
+            }
+
             if (! $this->pushPlaywrightBranch($test, $logFile, $paths['output'], $gitUrl, $gitIdentityName, $gitIdentityEmail, $testBranch)) {
+                if ($this->isGenerationCancelled($test)) {
+                    return;
+                }
+
+                return;
+            }
+
+            if ($this->isGenerationCancelled($test)) {
                 return;
             }
 
             $headSha = $this->resolveHeadSha($paths['output']);
 
-            $actionsResult = $this->waitForPlaywrightActions($logFile, (string) $test->repo_name, $testBranch, $headSha);
+            $actionsResult = $this->waitForPlaywrightActions($logFile, (string) $test->repo_name, $testBranch, $headSha, $test);
             if (! ($actionsResult['ok'] ?? false)) {
+                if (($actionsResult['cancelled'] ?? false) || $this->isGenerationCancelled($test)) {
+                    return;
+                }
+
                 $error = (string) ($actionsResult['error'] ?? 'Playwright tests failed on Gitea Actions.');
                 Log::error('Playwright actions validation failed', [
                     'test_id' => $test->id,
@@ -891,6 +976,10 @@ class PlaywrightGeneratorService
                 ]);
                 $this->markTestFailed($test, $logFile, $error);
 
+                return;
+            }
+
+            if ($this->isGenerationCancelled($test)) {
                 return;
             }
 

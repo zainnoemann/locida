@@ -83,12 +83,14 @@ class TestTable
                         Test::STATUS_COMPLETED => 'success',
                         Test::STATUS_GENERATING => 'warning',
                         Test::STATUS_FAILED => 'danger',
+                        Test::STATUS_CANCELLED => 'gray',
                         default => 'gray',
                     })
                     ->icon(fn(string $state): string => match ($state) {
                         Test::STATUS_COMPLETED => 'heroicon-m-check-circle',
                         Test::STATUS_GENERATING => 'heroicon-m-arrow-path',
                         Test::STATUS_FAILED => 'heroicon-m-x-circle',
+                        Test::STATUS_CANCELLED => 'heroicon-m-minus-circle',
                         default => 'heroicon-m-minus-circle',
                     }),
                 \Filament\Tables\Columns\TextColumn::make('error')

@@ -32,6 +32,13 @@ class TestLog extends Component
         'Exception:',
     ];
 
+    /**
+     * @var array<int, string>
+     */
+    private const CANCELLATION_MARKERS = [
+        'Generation cancelled by user.',
+    ];
+
     public function mount(int $testId, string $viewType = 'both')
     {
         $this->testId = $testId;
@@ -99,6 +106,18 @@ class TestLog extends Component
                 : min($failurePosition, $position);
         }
 
+        $cancellationPosition = null;
+        foreach (self::CANCELLATION_MARKERS as $marker) {
+            $position = strpos($logs, $marker);
+            if ($position === false) {
+                continue;
+            }
+
+            $cancellationPosition = $cancellationPosition === null
+                ? $position
+                : min($cancellationPosition, $position);
+        }
+
         $activeStageKey = null;
         $completedStageKey = null;
 
@@ -126,6 +145,15 @@ class TestLog extends Component
 
             if ($completedStageKey !== null) {
                 $status = 'done';
+            } elseif ($cancellationPosition !== null) {
+                if ($stagePosition !== null && $stagePosition < $cancellationPosition) {
+                    $status = 'done';
+                }
+
+                if ($stage['key'] === $activeStageKey) {
+                    $status = 'cancelled';
+                    $failedAttached = true;
+                }
             } elseif ($failurePosition !== null) {
                 if ($stagePosition !== null && $stagePosition < $failurePosition) {
                     $status = 'done';
@@ -150,10 +178,10 @@ class TestLog extends Component
             ];
         }
 
-        if ($failurePosition !== null && ! $failedAttached) {
+        if (($failurePosition !== null || $cancellationPosition !== null) && ! $failedAttached) {
             $lastStageIndex = count($stages) - 1;
             if ($lastStageIndex >= 0) {
-                $stages[$lastStageIndex]['status'] = 'failed';
+                $stages[$lastStageIndex]['status'] = $cancellationPosition !== null ? 'cancelled' : 'failed';
             }
         }
 

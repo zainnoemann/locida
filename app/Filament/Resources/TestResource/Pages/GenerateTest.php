@@ -4,6 +4,7 @@ namespace App\Filament\Resources\TestResource\Pages;
 
 use App\Filament\Resources\TestResource;
 use App\Models\Test;
+use App\Services\PlaywrightGeneratorService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
@@ -20,6 +21,11 @@ class GenerateTest extends Page
     public function mount(Test $record): void
     {
         $this->record = $record;
+    }
+
+    public function hydrate(): void
+    {
+        $this->record->refresh();
     }
 
     public function getTitle(): string
@@ -50,14 +56,52 @@ class GenerateTest extends Page
     {
         return [
             Action::make('regenerate')
-                ->label('Regenerate')
-                ->icon('heroicon-m-arrow-path')
-                ->color('warning')
+                ->label(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                    ? 'Cancel'
+                    : 'Regenerate')
+                ->icon(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                    ? 'heroicon-m-x-circle'
+                    : 'heroicon-m-arrow-path')
+                ->color(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                    ? 'danger'
+                    : 'warning')
                 ->visible(fn(): bool => Auth::check())
-                ->disabled(fn(): bool => $this->record->status === Test::STATUS_GENERATING)
                 ->requiresConfirmation()
+                ->modalHeading(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                    ? 'Cancel generation?'
+                    : 'Regenerate test?')
+                ->modalSubmitActionLabel(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                    ? 'Cancel'
+                    : 'Regenerate')
+                ->modalCancelActionLabel(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                    ? 'Keep running'
+                    : 'Close')
                 ->action(function (): void {
+                    if ($this->record->status === Test::STATUS_GENERATING) {
+                        if (app(PlaywrightGeneratorService::class)->cancelGeneration($this->record)) {
+                            $this->record->refresh();
+
+                            Notification::make()
+                                ->warning()
+                                ->title('Generation cancelled')
+                                ->body('The current test generation has been stopped.')
+                                ->send();
+
+                            return;
+                        }
+
+                        Notification::make()
+                            ->info()
+                            ->title('Generation already stopped')
+                            ->body('The test is no longer generating.')
+                            ->send();
+
+                        return;
+                    }
+
                     \App\Jobs\GenerateTestJob::dispatch($this->record);
+                    $this->record->refresh();
+
                     Notification::make()
                         ->success()
                         ->title('Regeneration started')

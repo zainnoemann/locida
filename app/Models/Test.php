@@ -10,6 +10,7 @@ class Test extends Model
     public const STATUS_GENERATING = 'generating';
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_FAILED = 'failed';
+    public const STATUS_CANCELLED = 'cancelled';
 
     protected $table = 'tests';
 
@@ -40,6 +41,7 @@ class Test extends Model
             self::STATUS_GENERATING => 'Generating',
             self::STATUS_COMPLETED => 'Completed',
             self::STATUS_FAILED => 'Failed',
+            self::STATUS_CANCELLED => 'Cancelled',
         ];
     }
 }

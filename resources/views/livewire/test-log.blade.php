@@ -7,24 +7,28 @@
     'active' => 'In Progress',
     'pending' => 'Pending',
     'failed' => 'Failed',
+    'cancelled' => 'Cancelled',
     ];
     $nodeClasses = [
     'done' => 'border-emerald-500 bg-emerald-500',
     'active' => 'border-amber-500 bg-amber-500 animate-pulse',
     'pending' => 'border-gray-400 bg-white',
     'failed' => 'border-rose-500 bg-rose-500',
+    'cancelled' => 'border-slate-500 bg-slate-500',
     ];
     $labelClasses = [
     'done' => 'text-emerald-700 dark:text-emerald-300',
     'active' => 'text-amber-700 dark:text-amber-300',
     'pending' => 'text-gray-600 dark:text-gray-400',
     'failed' => 'text-rose-700 dark:text-rose-300',
+    'cancelled' => 'text-slate-600 dark:text-slate-300',
     ];
     $lineClasses = [
     'done' => 'bg-emerald-500',
     'active' => 'bg-amber-500',
     'pending' => 'bg-gray-300 dark:bg-gray-700',
     'failed' => 'bg-rose-500',
+    'cancelled' => 'bg-slate-500',
     ];
     @endphp
 
@@ -65,6 +69,8 @@
                         $colorName = 'gray';
                     } elseif ($stage['status'] === 'failed') {
                         $colorName = 'rose';
+                    } elseif ($stage['status'] === 'cancelled') {
+                        $colorName = 'gray';
                     }
                     $bgClass = "bg-{$colorName}-c";
                     $textClass = "text-{$colorName}-c";
@@ -94,6 +100,8 @@
                             $lineColorName = 'primary';
                             if ($nextStage['status'] === 'failed') {
                                 $lineColorName = 'rose';
+                            } elseif ($nextStage['status'] === 'cancelled') {
+                                $lineColorName = 'gray';
                             }
                         }
                     @endphp

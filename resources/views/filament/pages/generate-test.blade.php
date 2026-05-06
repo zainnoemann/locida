@@ -1,4 +1,4 @@
-<x-filament-panels::page>
+<x-filament-panels::page wire:poll.2s>
     <div class="flex flex-col gap-8">
         <x-filament::section>
             <x-slot name="heading">
