@@ -12,11 +12,19 @@ class TestForm
             ->components([
                 \Filament\Forms\Components\Select::make('repo_url')
                     ->label('Source Repository')
-                    ->options(function (\App\Services\GiteaService $giteaService) {
-                        return collect($giteaService->getRepositories())
+                    ->options(function (callable $get, \App\Services\GiteaService $giteaService) {
+                        $repos = collect($giteaService->getRepositories())
                             ->filter(fn($repo) => is_array($repo) && isset($repo['clone_url'], $repo['full_name']))
-                            ->mapWithKeys(fn($repo) => [$repo['clone_url'] => $repo['full_name']])
-                            ->all();
+                            ->mapWithKeys(fn($repo) => [$repo['clone_url'] => $repo['full_name']]);
+
+                        $current = trim((string) ($get('repo_url') ?? ''));
+                        $currentName = trim((string) ($get('repo_name') ?? ''));
+
+                        if ($current !== '' && ! array_key_exists($current, $repos->all())) {
+                            $repos->put($current, $currentName !== '' ? $currentName : $current);
+                        }
+
+                        return $repos->all();
                     })
                     ->helperText('Select a source repository from Gitea to generate Playwright tests.')
                     ->searchable()
