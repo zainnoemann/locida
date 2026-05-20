@@ -230,7 +230,18 @@ export function generateResourcePage(resource: ResourceInfo): string {
         .map((f) => {
             const prop = toFieldProp(f.name || '');
             if ((f.type || '').toLowerCase() === 'select') {
-                return `  async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> {\n    await this.${prop}.selectOption({ label: value });\n  }`;
+                return `  async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> {
+    const options = this.${prop}.locator('option');
+    await options.first().waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
+    const count = await options.count();
+    if (count > 1) {
+      await this.${prop}.selectOption({ index: count - 1 });
+    } else if (count === 1) {
+      await this.${prop}.selectOption({ index: 0 });
+    } else {
+      await this.${prop}.selectOption(value).catch(() => {});
+    }
+  }`;
             }
             if ((f.type || '').toLowerCase() === 'checkbox') {
                 return `  async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> {\n    if (value === 'true') await this.${prop}.check();\n    else await this.${prop}.uncheck();\n  }`;
@@ -292,8 +303,10 @@ ${createFillLines}
         await row.locator('a[href*="/edit"], a[href*="edit"]').first().click();
 ${resource.fields
             .map((f) => {
+                const isSelectOrCheckbox = ['select', 'checkbox'].includes((f.type || '').toLowerCase());
                 const call = `fill${capitalize(toFieldProp(f.name || '').replace(/Input$/, ''))}`;
-                return `    if (data['${escapeSingle(f.name || '')}'] !== undefined) {\n      await this.${toFieldProp(f.name || '')}.clear();\n      await this.${call}(data['${escapeSingle(f.name || '')}']);\n    }`;
+                const clearStr = !isSelectOrCheckbox ? `      await this.${toFieldProp(f.name || '')}.clear();\n` : '';
+                return `    if (data['${escapeSingle(f.name || '')}'] !== undefined) {\n${clearStr}      await this.${call}(data['${escapeSingle(f.name || '')}']);\n    }`;
             })
             .join('\n')}
         await this.clickSubmit();

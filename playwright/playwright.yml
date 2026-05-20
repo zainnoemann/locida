@@ -1,0 +1,103 @@
+name: Playwright Automation Pipeline
+
+on:
+    workflow_dispatch:
+    push:
+        branches: ['**']
+    pull_request:
+        branches: ['**']
+
+jobs:
+    playwright:
+        runs-on: ubuntu-latest
+        container:
+            image: mcr.microsoft.com/playwright:v1.58.2-jammy
+            options: >-
+                --add-host gitea:host-gateway
+                --add-host host.docker.internal:host-gateway
+                --mount type=volume,source=playwright-npm-cache,target=/root/.npm
+
+        env:
+            APP_URL: http://host.docker.internal:8000
+            BASE_URL: http://host.docker.internal:8000
+            CRAWLER_DIR: playwright/crawler
+            GENERATOR_DIR: playwright/generator
+            PLAYWRIGHT_TESTS_DIR: playwright/generator/tests
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  github-server-url: http://gitea:3000
+
+            - name: Install crawler dependencies
+              run: |
+                  cd "$CRAWLER_DIR"
+                  npm install --prefer-offline --no-audit --no-fund
+
+            - name: Build crawler
+              run: |
+                  cd "$CRAWLER_DIR"
+                  npm run build
+
+            - name: Run Playwright Crawler
+              env:
+                  START_URL: http://host.docker.internal:8000
+                  TEST_EMAIL: playwright@example.com
+                  TEST_PASSWORD: playwright
+                  HEADLESS: 'true'
+              run: |
+                  cd "$CRAWLER_DIR"
+                  npm run start
+
+            - name: Install generator dependencies
+              run: |
+                  cd "$GENERATOR_DIR"
+                  npm install --prefer-offline --no-audit --no-fund
+
+            - name: Build generator
+              run: |
+                  cd "$GENERATOR_DIR"
+                  npm run build
+
+            - name: Generate tests
+              env:
+                  BASE_URL: http://host.docker.internal:8000
+              run: |
+                  cd "$GENERATOR_DIR"
+                  node dist/index.js ../crawler/storage/datasets/default ./tests --base-url "$BASE_URL" --gitea-app-host host.docker.internal:8000
+
+            - name: Install test dependencies
+              run: |
+                  cd "$PLAYWRIGHT_TESTS_DIR"
+                  npm install --prefer-offline --no-audit --no-fund
+
+            - name: Run Playwright tests
+              env:
+                  BASE_URL: http://host.docker.internal:8000
+              run: |
+                  cd "$PLAYWRIGHT_TESTS_DIR"
+                  npx playwright test
+
+            - name: Save output to branch folder
+              if: always()
+              run: |
+                  DATASET_DIR="$CRAWLER_DIR/storage/datasets/default"
+                  
+                  if [ -d "$DATASET_DIR" ]; then
+                      git add "$DATASET_DIR"
+                  fi
+                  
+                  if [ -d "$PLAYWRIGHT_TESTS_DIR" ]; then
+                      rm -rf "$PLAYWRIGHT_TESTS_DIR/node_modules"
+                      git add "$PLAYWRIGHT_TESTS_DIR"
+                      
+                      if [ -d "$GENERATOR_DIR/reports" ]; then
+                          git add "$GENERATOR_DIR/reports"
+                      fi
+                  fi
+
+                  git config user.name "gitea-actions[bot]"
+                  git config user.email "gitea-actions@localhost"
+                  git commit -m "test(playwright): add crawler, generator, and test reports" || echo "No changes to commit"
+                  git push --force origin "HEAD:${GITHUB_REF_NAME}"

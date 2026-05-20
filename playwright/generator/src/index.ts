@@ -8,7 +8,7 @@ import { generateBasePage, generateDashboardPage, generateLoginPage, generatePro
 import { generateAuthSetupSpec, generateAuthSpec, generateProfileSpec, generateResourceSpec } from './builders/specs.js';
 import { generateFixtures } from './builders/fixtures.js';
 import { generatePlaywrightConfig, generatePackageJson, generateTsConfig } from './builders/config.js';
-import { generateGiteaWorkflow } from './builders/workflow.js';
+
 
 function defaultDatasetDir(): string {
   return path.resolve(process.cwd(), '../crawler/storage/datasets/default');
@@ -50,21 +50,18 @@ function main(): void {
 
   fs.rmSync(outputDir, { recursive: true, force: true });
   const dirs = [outputDir, 'fixtures', 'pages', 'tests'].map((d) => (d === outputDir ? d : path.join(outputDir, d)));
-  if (opts.gitea.enabled) dirs.push(path.join(outputDir, '.gitea', 'workflows'));
   dirs.forEach((d) => fs.mkdirSync(d, { recursive: true }));
 
   const written: Record<string, string[]> = {
     pages: [],
     tests: [],
     config: [],
-    workflow: [],
   };
 
   const write = (relPath: string, content: string): void => {
     fs.writeFileSync(path.join(outputDir, relPath), content, 'utf8');
     if (relPath.startsWith('pages/')) written.pages.push(relPath);
     else if (relPath.startsWith('tests/')) written.tests.push(relPath);
-    else if (relPath.startsWith('.gitea/')) written.workflow.push(relPath);
     else written.config.push(relPath);
   };
 
@@ -92,9 +89,7 @@ function main(): void {
     write(`tests/${resource.name}.spec.ts`, generateResourceSpec(resource));
   }
 
-  if (opts.gitea.enabled) {
-    write('.gitea/workflows/playwright.yml', generateGiteaWorkflow(opts));
-  }
+
 
   if (written.pages.length > 0) {
     console.log('Generating Page Objects...');
@@ -114,11 +109,6 @@ function main(): void {
     console.log('');
   }
 
-  if (written.workflow.length > 0) {
-    console.log('Generating Gitea CI/CD Workflow...');
-    written.workflow.forEach((f) => console.log(`  ✓ ${f}`));
-    console.log('');
-  }
 
   const totalFiles = Object.values(written).flat().length;
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);

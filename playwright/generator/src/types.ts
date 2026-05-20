@@ -63,7 +63,7 @@ export interface TestUser {
 }
 
 export interface GiteaOptions {
-  enabled: boolean;
+  
   serverUrl: string;
   appHost: string;
   playwrightImage: string;
