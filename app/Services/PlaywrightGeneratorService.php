@@ -14,14 +14,6 @@ class PlaywrightGeneratorService
     private const DEFAULT_TEST_BRANCH = 'playwright';
     private const ACTIONS_POLL_INTERVAL_SECONDS = 5;
     private const ACTIONS_MAX_WAIT_SECONDS = 900;
-    private const GENERATED_ARTIFACTS = [
-        'fixtures',
-        'pages',
-        'tests',
-        'playwright.config.ts',
-        'package.json',
-        'tsconfig.json',
-    ];
 
     public function cancelGeneration(Test $test): bool
     {
@@ -49,7 +41,7 @@ class PlaywrightGeneratorService
         return true;
     }
 
-    private function isGenerationCancelled(Test $test): bool
+    public function isGenerationCancelled(Test $test): bool
     {
         $test->refresh();
 
@@ -130,17 +122,6 @@ class PlaywrightGeneratorService
         }
 
         return rtrim($candidate, '/');
-    }
-
-    private function resolveGiteaAppHost(string $targetUrl): string
-    {
-        $parsedUrl = parse_url($targetUrl);
-        $host = $parsedUrl['host'] ?? '127.0.0.1';
-        $port = $parsedUrl['port'] ?? (($parsedUrl['scheme'] ?? 'http') === 'https' ? 443 : 80);
-
-        $host = $this->normalizeRuntimeHost($host);
-
-        return $host . ':' . $port;
     }
 
     private function validateTargetUrl(string $targetUrl): ?string
@@ -524,95 +505,96 @@ class PlaywrightGeneratorService
         }
     }
 
-    private function waitForPlaywrightActions(string $logFile, string $repoFullName, string $testBranch, string $headSha, Test $test): array
-    {
+    public function pollPlaywrightActions(
+        string $logFile,
+        string $repoFullName,
+        string $testBranch,
+        string $headSha,
+        Test $test,
+        ?int &$trackedRunId
+    ): array {
         $apiUrl = rtrim((string) config('services.gitea.url'), '/');
         $apiToken = (string) config('services.gitea.token');
         if ($apiUrl === '' || $apiToken === '') {
-            return ['ok' => false, 'error' => 'Gitea API is not configured.'];
+            return ['status' => 'error', 'error' => 'Gitea API is not configured.'];
         }
 
         [$owner, $repo] = $this->parseRepoFullName($repoFullName);
         if ($owner === null || $repo === null) {
-            return ['ok' => false, 'error' => 'Invalid repository name format. Expected owner/repo.'];
+            return ['status' => 'error', 'error' => 'Invalid repository name format. Expected owner/repo.'];
         }
 
-        $waitStart = time();
-        $deadline = $waitStart + self::ACTIONS_MAX_WAIT_SECONDS;
-        $runId = null;
-        $trackedRunId = null;
-        $jobLogState = [];
-
-        while (time() <= $deadline) {
-            if ($this->isGenerationCancelled($test)) {
-                return ['ok' => false, 'cancelled' => true, 'error' => 'Generation cancelled by user.'];
-            }
-
-            $run = null;
-            if ($trackedRunId !== null) {
-                $run = $this->fetchActionRunById($apiUrl, $apiToken, $owner, $repo, $trackedRunId);
-            }
-
-            if ($run === null) {
-                $run = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, $testBranch, $headSha);
-            }
-
-            if ($run === null && $trackedRunId !== null) {
-                $latestRun = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, $testBranch);
-                if ($latestRun !== null) {
-                    $latestRunId = (int) ($latestRun['id'] ?? 0);
-                    // Accept latest run as fallback even when already completed.
-                    // This prevents missing the completion marker when run-by-id lookup is temporarily unavailable.
-                    if ($latestRunId >= $trackedRunId || $latestRunId === 0) {
-                        $run = $latestRun;
-                        $trackedRunId = $latestRunId > 0 ? $latestRunId : $trackedRunId;
-                    }
-                }
-            }
-            if ($run === null) {
-                sleep(self::ACTIONS_POLL_INTERVAL_SECONDS);
-                continue;
-            }
-
-            $runId = (int) ($run['id'] ?? 0);
-            if ($runId > 0 && $trackedRunId === null) {
-                File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Starting Playwright tests on Gitea Actions run #{$runId}.\n");
-            }
-            if ($runId > 0) {
-                $trackedRunId = $runId;
-            }
-            $status = (string) ($run['status'] ?? '');
-            $conclusion = (string) ($run['conclusion'] ?? '');
-
-            $this->streamRunLogsToGeneratorLog($logFile, $apiUrl, $apiToken, $owner, $repo, $runId, $jobLogState);
-
-            if (in_array($status, ['completed', 'success'], true)) {
-                $this->flushFinalRunLogs($logFile, $apiUrl, $apiToken, $owner, $repo, $runId, $jobLogState);
-                $completedText = "Gitea Actions run #{$runId} completed";
-                if ($conclusion !== '') {
-                    $completedText .= " ({$conclusion})";
-                }
-                File::append($logFile, $completedText . ".\n");
-
-                if ($conclusion === '' || in_array($conclusion, ['success', 'neutral', 'skipped'], true)) {
-                    return ['ok' => true, 'run' => $run];
-                }
-
-                $runUrl = (string) ($run['html_url'] ?? '');
-                $error = "Playwright tests failed on Gitea Actions (conclusion: {$conclusion}).";
-                if ($runUrl !== '') {
-                    $error .= " Run: {$runUrl}";
-                }
-
-                return ['ok' => false, 'error' => $error];
-            }
-
-            sleep(self::ACTIONS_POLL_INTERVAL_SECONDS);
+        if ($this->isGenerationCancelled($test)) {
+            return ['status' => 'cancelled', 'error' => 'Generation cancelled by user.'];
         }
 
-        $suffix = $runId !== null ? " Last seen run #{$runId}." : '';
+        $run = null;
+        if ($trackedRunId !== null) {
+            $run = $this->fetchActionRunById($apiUrl, $apiToken, $owner, $repo, $trackedRunId);
+        }
 
-        return ['ok' => false, 'error' => 'Timed out waiting for Playwright tests on Gitea Actions.' . $suffix];
+        if ($run === null) {
+            $run = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, $testBranch, $headSha);
+        }
+
+        if ($run === null && $trackedRunId !== null) {
+            $latestRun = $this->fetchLatestActionRun($apiUrl, $apiToken, $owner, $repo, $testBranch);
+            if ($latestRun !== null) {
+                $latestRunId = (int) ($latestRun['id'] ?? 0);
+                if ($latestRunId >= $trackedRunId || $latestRunId === 0) {
+                    $run = $latestRun;
+                    $trackedRunId = $latestRunId > 0 ? $latestRunId : $trackedRunId;
+                }
+            }
+        }
+        
+        if ($run === null) {
+            return ['status' => 'pending'];
+        }
+
+        $runId = (int) ($run['id'] ?? 0);
+        if ($runId > 0 && $trackedRunId === null) {
+            File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Starting Playwright tests on Gitea Actions run #{$runId}.\n");
+        }
+        if ($runId > 0) {
+            $trackedRunId = $runId;
+        }
+        $status = (string) ($run['status'] ?? '');
+        $conclusion = (string) ($run['conclusion'] ?? '');
+
+        // GET STATE FROM CACHE
+        $cacheKey = "test_job_log_state_{$test->id}";
+        $jobLogState = \Illuminate\Support\Facades\Cache::get($cacheKey, []);
+
+        $this->streamRunLogsToGeneratorLog($logFile, $apiUrl, $apiToken, $owner, $repo, $runId, $jobLogState);
+
+        // SAVE STATE TO CACHE
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $jobLogState, now()->addHours(1));
+
+        if (in_array($status, ['completed', 'success'], true)) {
+            $this->flushFinalRunLogs($logFile, $apiUrl, $apiToken, $owner, $repo, $runId, $jobLogState);
+            \Illuminate\Support\Facades\Cache::forget($cacheKey);
+            
+            $completedText = "Gitea Actions run #{$runId} completed";
+            if ($conclusion !== '') {
+                $completedText .= " ({$conclusion})";
+            }
+            File::append($logFile, $completedText . ".\n");
+
+            if ($conclusion === '' || in_array($conclusion, ['success', 'neutral', 'skipped'], true)) {
+                return ['status' => 'completed', 'run' => $run];
+            }
+
+            $runUrl = (string) ($run['html_url'] ?? '');
+            $error = "Playwright tests failed on Gitea Actions (conclusion: {$conclusion}).";
+            if ($runUrl !== '') {
+                $error .= " Run: {$runUrl}";
+            }
+
+            return ['status' => 'error', 'error' => $error];
+        }
+
+        return ['status' => 'pending'];
     }
 
     private function buildWorkspacePaths(Test $test): array
@@ -630,7 +612,6 @@ class PlaywrightGeneratorService
             'storage' => $storagePath,
             'output' => $storagePath . '/tests',
             'clone' => $storagePath . '/source',
-            'generated' => $storagePath . '/generated-playwright',
         ];
     }
 
@@ -650,7 +631,7 @@ class PlaywrightGeneratorService
 
     private function prepareWorkspaceDirectories(array $paths): void
     {
-        foreach (['clone', 'output', 'generated'] as $pathKey) {
+        foreach (['clone', 'output'] as $pathKey) {
             $path = (string) ($paths[$pathKey] ?? '');
             if ($path === '') {
                 continue;
@@ -662,7 +643,6 @@ class PlaywrightGeneratorService
         }
 
         File::makeDirectory($paths['output'], 0755, true);
-        File::makeDirectory($paths['generated'], 0755, true);
     }
 
     private function appendLog(string $logFile, string $message): void
@@ -670,7 +650,7 @@ class PlaywrightGeneratorService
         File::append($logFile, $message);
     }
 
-    private function markTestFailed(Test $test, string $logFile, string $error, string $logPrefix = 'Error'): void
+    public function markTestFailed(Test $test, string $logFile, string $error, string $logPrefix = 'Error'): void
     {
         $message = trim($error);
         if ($message === '') {
@@ -691,7 +671,7 @@ class PlaywrightGeneratorService
         $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Cloning source from {$test->repo_url} (branch: {$sourceBranch})...\n");
 
         $cloneProcess = Process::run(
-            'git clone --branch ' . escapeshellarg($sourceBranch)
+            'git clone --depth 1 --branch ' . escapeshellarg($sourceBranch)
             . ' --single-branch '
             . escapeshellarg($gitUrl)
             . ' '
@@ -715,90 +695,85 @@ class PlaywrightGeneratorService
         return false;
     }
 
-    private function runPlaywrightGenerator(Test $test, string $logFile, string $cloneDir, string $generatedDir, string $targetUrl, string $giteaAppHost, string $testBranch): bool
-    {
-        $generatorPath = base_path('playwright');
-        $command = 'npx ts-node src/index.ts '
-            . escapeshellarg($cloneDir) . ' '
-            . escapeshellarg($generatedDir)
-            . ' --base-url ' . escapeshellarg($targetUrl)
-            . ' --gitea-app-host ' . escapeshellarg($giteaAppHost)
-            . ' --gitea-branch ' . escapeshellarg($testBranch);
-
-        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Running Playwright Generator: {$command}\n");
-
-        $genProcess = Process::path($generatorPath)
-            ->run($command, function (string $type, string $output) use ($logFile) {
-                File::append($logFile, $output);
-            });
-
-        if (! $genProcess->failed()) {
-            return true;
-        }
-
-        Log::error('Playwright generator failed', [
-            'test_id' => $test->id,
-            'error' => $genProcess->errorOutput(),
-        ]);
-
-        $this->markTestFailed($test, $logFile, (string) $genProcess->errorOutput());
-
-        return false;
-    }
-
     private function prepareOutputRepository(string $cloneDir, string $outputDir): void
     {
         File::copyDirectory($cloneDir, $outputDir);
-
-        if (File::exists($outputDir . '/.git')) {
-            File::deleteDirectory($outputDir . '/.git');
-        }
     }
 
-    private function publishGeneratedArtifacts(string $generatedDir, string $outputDir): void
+    private function publishGeneratedArtifacts(string $outputDir, string $testBranch): void
     {
+        $sourceWorkflowFile = base_path('playwright/playwright.yml');
+        $targetWorkflowDir = $outputDir . '/.gitea/workflows';
+        
+        if (File::exists($targetWorkflowDir)) {
+            File::deleteDirectory($targetWorkflowDir);
+        }
+        File::makeDirectory($targetWorkflowDir, 0755, true);
+
+        if (File::exists($sourceWorkflowFile)) {
+            $content = File::get($sourceWorkflowFile);
+            File::put($targetWorkflowDir . '/playwright.yml', $content);
+        }
+
         $playwrightDir = $outputDir . '/playwright';
         if (File::exists($playwrightDir)) {
             File::deleteDirectory($playwrightDir);
         }
         File::makeDirectory($playwrightDir, 0755, true);
 
-        foreach (self::GENERATED_ARTIFACTS as $artifact) {
-            $from = $generatedDir . '/' . $artifact;
-            $to = $playwrightDir . '/' . $artifact;
+        $this->publishSupportProject(
+            base_path('playwright/crawler'),
+            $playwrightDir . '/crawler',
+            ['src'],
+            ['package.json', 'package-lock.json', 'tsconfig.json', '.env.example']
+        );
 
-            if (! File::exists($from)) {
-                continue;
-            }
+        $this->publishSupportProject(
+            base_path('playwright/generator'),
+            $playwrightDir . '/generator',
+            ['src'],
+            ['package.json', 'package-lock.json', 'tsconfig.json']
+        );
+    }
 
-            if (File::isDirectory($from)) {
-                File::copyDirectory($from, $to);
-            } else {
-                File::copy($from, $to);
+    private function publishSupportProject(string $sourceDir, string $targetDir, array $directories, array $files): void
+    {
+        if (! File::exists($sourceDir)) {
+            return;
+        }
+
+        if (File::exists($targetDir)) {
+            File::deleteDirectory($targetDir);
+        }
+
+        File::makeDirectory($targetDir, 0755, true);
+
+        foreach ($directories as $directory) {
+            $from = $sourceDir . '/' . $directory;
+            if (File::exists($from)) {
+                File::copyDirectory($from, $targetDir . '/' . $directory);
             }
         }
 
-        $generatedWorkflowDir = $generatedDir . '/.gitea';
-        if (File::exists($generatedWorkflowDir)) {
-            File::copyDirectory($generatedWorkflowDir, $outputDir . '/.gitea');
-        }
-
-        if (File::exists($generatedDir)) {
-            File::deleteDirectory($generatedDir);
+        foreach ($files as $file) {
+            $from = $sourceDir . '/' . $file;
+            if (File::exists($from)) {
+                File::copy($from, $targetDir . '/' . $file);
+            }
         }
     }
 
     private function pushPlaywrightBranch(Test $test, string $logFile, string $outputDir, string $gitUrl, string $gitIdentityName, string $gitIdentityEmail, string $testBranch): bool
     {
-        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing generated tests to Gitea branch {$testBranch}...\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing Playwright crawler, generator, and workflows to Gitea branch {$testBranch}...\n");
 
         $gitCommands = [
             'git config --global --add safe.directory ' . escapeshellarg($outputDir),
-            'git init -b ' . escapeshellarg($testBranch),
+            'git checkout -b ' . escapeshellarg($testBranch),
             'git config user.name ' . escapeshellarg($gitIdentityName),
             'git config user.email ' . escapeshellarg($gitIdentityEmail),
             'git add .',
-            'git commit --allow-empty -m "test(playwright): generate tests"',
+            'git commit --allow-empty -m "test(playwright): automate crawler and generated test execution"',
             '(git remote remove origin 2>/dev/null || true)',
             "git credential reject <<EOF\nprotocol=http\nhost=gitea\nEOF",
             'git remote add origin ' . escapeshellarg($gitUrl) . ' || git remote set-url origin ' . escapeshellarg($gitUrl),
@@ -845,7 +820,7 @@ class PlaywrightGeneratorService
         return $headShaProcess->successful() ? trim($headShaProcess->output()) : '';
     }
 
-    private function markTestCompleted(Test $test, string $logFile): void
+    public function markTestCompleted(Test $test, string $logFile): void
     {
         $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Playwright report available on Gitea Actions.\n");
         $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Done.\n");
@@ -894,7 +869,6 @@ class PlaywrightGeneratorService
             $sourceBranch = $this->resolveSourceBranch($test);
             $testBranch = $this->resolveTestBranch($test);
             $targetUrl = $this->resolveTargetUrl($test->app_url);
-            $giteaAppHost = $this->resolveGiteaAppHost($targetUrl);
 
             $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Validating App URL accessibility: {$targetUrl}\n");
             $targetUrlValidationError = $this->validateTargetUrl($targetUrl);
@@ -929,20 +903,9 @@ class PlaywrightGeneratorService
                 return;
             }
 
-            if (! $this->runPlaywrightGenerator($test, $logFile, $paths['clone'], $paths['generated'], $targetUrl, $giteaAppHost, $testBranch)) {
-                if ($this->isGenerationCancelled($test)) {
-                    return;
-                }
-
-                return;
-            }
-
-            if ($this->isGenerationCancelled($test)) {
-                return;
-            }
-
             $this->prepareOutputRepository($paths['clone'], $paths['output']);
-            $this->publishGeneratedArtifacts($paths['generated'], $paths['output']);
+            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Staging Playwright crawler, generator, and workflows for Gitea Actions...\n");
+            $this->publishGeneratedArtifacts($paths['output'], $testBranch);
 
             if ($this->isGenerationCancelled($test)) {
                 return;
@@ -962,30 +925,20 @@ class PlaywrightGeneratorService
 
             $headSha = $this->resolveHeadSha($paths['output']);
 
-            $actionsResult = $this->waitForPlaywrightActions($logFile, (string) $test->repo_name, $testBranch, $headSha, $test);
-            if (! ($actionsResult['ok'] ?? false)) {
-                if (($actionsResult['cancelled'] ?? false) || $this->isGenerationCancelled($test)) {
-                    return;
-                }
+            $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Dispatching polling job to monitor Gitea Actions...\n");
+            
+            $deadline = time() + self::ACTIONS_MAX_WAIT_SECONDS;
+            \App\Jobs\PollPlaywrightJob::dispatch(
+                $test,
+                $logFile,
+                (string) $test->repo_name,
+                $testBranch,
+                $headSha,
+                $deadline,
+                null
+            );
 
-                $error = (string) ($actionsResult['error'] ?? 'Playwright tests failed on Gitea Actions.');
-                Log::error('Playwright actions validation failed', [
-                    'test_id' => $test->id,
-                    'repo' => $test->repo_name,
-                    'error' => $error,
-                ]);
-                $this->markTestFailed($test, $logFile, $error);
-
-                return;
-            }
-
-            if ($this->isGenerationCancelled($test)) {
-                return;
-            }
-
-            $this->markTestCompleted($test, $logFile);
-
-            Log::info('Playwright generator completed successfully for ' . $test->name);
+            return; // Eksekusi akan dilanjutkan oleh PollPlaywrightActionsJob
         } catch (\Throwable $e) {
             Log::error('Playwright generator exception', ['message' => $e->getMessage()]);
             $this->markTestFailed($test, $logFile, $e->getMessage(), 'Exception');

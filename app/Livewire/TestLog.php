@@ -15,10 +15,10 @@ class TestLog extends Component
      */
     private const TIMELINE_STAGES = [
         ['key' => 'start', 'label' => 'Start', 'marker' => 'Starting generator process'],
-        ['key' => 'clone', 'label' => 'Clone Source', 'marker' => 'Cloning source'],
-        ['key' => 'generate', 'label' => 'Generate Tests', 'marker' => 'Running Playwright Generator'],
-        ['key' => 'test', 'label' => 'Playwright Tests', 'marker' => 'Committing and pushing generated tests to Gitea'],
-        ['key' => 'report', 'label' => 'Playwright Report', 'marker' => 'Playwright report available on Gitea Actions'],
+        ['key' => 'init', 'label' => 'Test Initialization', 'marker' => 'Cloning source'],
+        ['key' => 'generate', 'label' => 'Test Generation', 'marker' => 'Playwright Test Generator'],
+        ['key' => 'execute', 'label' => 'Test Execution', 'marker' => 'tests using '],
+        ['key' => 'report', 'label' => 'Test Reporting', 'marker' => 'Playwright report available'],
         ['key' => 'done', 'label' => 'Completed', 'marker' => 'Done.'],
     ];
 
@@ -188,8 +188,13 @@ class TestLog extends Component
         $stageTimestamps = [];
         foreach (self::TIMELINE_STAGES as $s) {
             $marker = preg_quote($s['marker'], '/');
-            if (preg_match('/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\][^\n]*?' . $marker . '/', $logs, $matches)) {
-                $stageTimestamps[$s['key']] = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $matches[1]);
+            $pattern = '/(?:\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?Z)[^\n]*?' . $marker . '/';
+            if (preg_match($pattern, $logs, $matches)) {
+                if (!empty($matches[1])) {
+                    $stageTimestamps[$s['key']] = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $matches[1]);
+                } elseif (!empty($matches[2])) {
+                    $stageTimestamps[$s['key']] = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', str_replace('T', ' ', $matches[2]));
+                }
             }
         }
 
