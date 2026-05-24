@@ -18,13 +18,17 @@
 
     @if ($isLinkMode)
     @if (! empty($report['htmlReportUrl']))
-    <a
+    <x-filament::button
+        tag="a"
         href="{{ $report['htmlReportUrl'] }}"
         target="_blank"
         rel="noopener noreferrer"
-        class="inline-flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 transition hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:border-primary-700/60 dark:bg-primary-900/30 dark:text-primary-200 dark:hover:bg-primary-900/50">
-        View HTML Report
-    </a>
+        color="info"
+        icon="heroicon-o-document-chart-bar"
+        size="sm"
+    >
+        Report
+    </x-filament::button>
     @endif
     @else
 

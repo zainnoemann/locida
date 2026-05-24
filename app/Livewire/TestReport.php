@@ -16,7 +16,7 @@ class TestReport extends Component
     public string $keyword = '';
     public string $renderMode = 'full';
     private const DEFAULT_TEST_BRANCH = 'playwright';
-    private const PRIMARY_REPORT_BASE_PATH = 'playwright/reports';
+    private const PRIMARY_REPORT_BASE_PATH = 'playwright/generator/reports';
     private const PRIMARY_HTML_REPORT_FILE = 'index.html';
     private const PRIMARY_REPORT_JSON_FILE = 'report.json';
     private const PRIMARY_REPORT_ASSET_DIRS = [
@@ -133,6 +133,7 @@ class TestReport extends Component
         $candidatePaths = [
             $this->primaryReportPath(self::PRIMARY_REPORT_JSON_FILE),
             // backward compatibility with older generated workflows/branches
+            'playwright/reports/report.json',
             'playwright/playwright-report/report.json',
             'playwright-report/report.json',
             'report.json',
