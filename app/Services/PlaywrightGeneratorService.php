@@ -700,7 +700,7 @@ class PlaywrightGeneratorService
         File::copyDirectory($cloneDir, $outputDir);
     }
 
-    private function publishGeneratedArtifacts(string $outputDir, string $testBranch): void
+    private function publishGeneratedArtifacts(string $outputDir, string $testBranch, Test $test): void
     {
         $sourceWorkflowFile = base_path('playwright/playwright.yml');
         $targetWorkflowDir = $outputDir . '/.gitea/workflows';
@@ -712,6 +712,22 @@ class PlaywrightGeneratorService
 
         if (File::exists($sourceWorkflowFile)) {
             $content = File::get($sourceWorkflowFile);
+
+            if (!empty($test->test_email)) {
+                $content = str_replace(
+                    'TEST_EMAIL: playwright@example.com',
+                    'TEST_EMAIL: ' . $test->test_email,
+                    $content
+                );
+            }
+            if (!empty($test->test_password)) {
+                $content = str_replace(
+                    'TEST_PASSWORD: playwright',
+                    'TEST_PASSWORD: ' . $test->test_password,
+                    $content
+                );
+            }
+
             File::put($targetWorkflowDir . '/playwright.yml', $content);
         }
 
@@ -905,7 +921,7 @@ class PlaywrightGeneratorService
 
             $this->prepareOutputRepository($paths['clone'], $paths['output']);
             $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Staging Playwright crawler, generator, and workflows for Gitea Actions...\n");
-            $this->publishGeneratedArtifacts($paths['output'], $testBranch);
+            $this->publishGeneratedArtifacts($paths['output'], $testBranch, $test);
 
             if ($this->isGenerationCancelled($test)) {
                 return;

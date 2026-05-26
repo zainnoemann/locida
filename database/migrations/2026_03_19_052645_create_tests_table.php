@@ -19,6 +19,8 @@ return new class extends Migration
             $table->string('source_branch')->default('main');
             $table->string('test_branch')->default('playwright');
             $table->string('app_url')->nullable();
+            $table->string('test_email')->nullable();
+            $table->string('test_password')->nullable();
             $table->string('status')->default('none')->index();
             $table->text('error')->nullable();
             $table->timestamp('started_at')->nullable();

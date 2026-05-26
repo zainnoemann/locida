@@ -216,6 +216,19 @@ class TestForm
                         };
                     })
                     ->maxLength(2048),
+                \Filament\Forms\Components\TextInput::make('test_email')
+                    ->label('Test Account Email')
+                    ->placeholder('Enter test account email')
+                    ->email()
+                    ->required()
+                    ->maxLength(255),
+                \Filament\Forms\Components\TextInput::make('test_password')
+                    ->label('Test Account Password')
+                    ->placeholder('Enter test account password')
+                    ->password()
+                    ->revealable()
+                    ->required()
+                    ->maxLength(255),
             ]);
     }
 }

@@ -21,6 +21,8 @@ class Test extends Model
         'source_branch',
         'test_branch',
         'app_url',
+        'test_email',
+        'test_password',
         'status',
         'error',
         'started_at',
