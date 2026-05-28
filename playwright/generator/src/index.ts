@@ -40,10 +40,10 @@ function main(): void {
     process.exit(0);
   }
 
-  console.log('\nPlaywright Test Generator v1.0.0\n');
-  console.log('Analysing Crawlee dataset...');
-  console.log(`  ✓ Source : ${path.resolve(datasetDir)}`);
-  console.log(`  ✓ Target : ${path.resolve(outputDir)}\n`);
+  const log = { info: (msg: string) => console.log(`\x1b[32mINFO\x1b[0m  ${msg}`) };
+
+  log.info('Starting the generator');
+  log.info('Analysing dataset');
 
   const byPath = loadDatasets(datasetDir);
   const analysis = analyzeDatasets(byPath);
@@ -92,42 +92,27 @@ function main(): void {
 
 
   if (written.pages.length > 0) {
-    console.log('Generating Page Objects...');
-    written.pages.forEach((f) => console.log(`  ✓ ${f}`));
-    console.log('');
+    log.info('Generating Page Objects');
+    written.pages.forEach((f) => log.info(`Generating: ${f}`));
   }
 
   if (written.tests.length > 0) {
-    console.log('Generating Test Specs...');
-    written.tests.forEach((f) => console.log(`  ✓ ${f}`));
-    console.log('');
+    log.info('Generating Test Specs');
+    written.tests.forEach((f) => log.info(`Generating: ${f}`));
   }
 
   if (written.config.length > 0) {
-    console.log('Generating Playwright Configuration...');
-    written.config.forEach((f) => console.log(`  ✓ ${f}`));
-    console.log('');
+    log.info('Generating Playwright Configuration');
+    written.config.forEach((f) => log.info(`Generating: ${f}`));
   }
 
 
   const totalFiles = Object.values(written).flat().length;
   const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
-  console.log(`Done in ${elapsedSec}s. ${totalFiles} artifacts generated successfully.\n`);
+  log.info(`${totalFiles} artifacts generated (${elapsedSec}s)`);
+  log.info(`Artifacts saved to ${path.resolve(outputDir)}`);
 
-  console.log('Next Steps:');
-  console.log('  1. Install dependencies');
-  console.log(`     $ cd ${outputDir} && npm install\n`);
-  console.log('  2. Run UI functional tests locally');
-  console.log(`     $ BASE_URL=${opts.baseUrl} npx playwright test\n`);
-  console.log('  3. Commit and push to Gitea');
-  console.log('     $ git init && git add .');
-  console.log('     $ git commit -m "test(ui): add playwright tests"');
-  console.log('     $ git remote add origin <gitea-repo-url>');
-  console.log(`     $ git push -u origin ${opts.gitea.branch}\n`);
 
-  console.log('Test Credentials:');
-  console.log(`  Email    : ${opts.testUser.email}`);
-  console.log(`  Password : ${opts.testUser.password}\n`);
 }
 
 main();

@@ -99,5 +99,5 @@ jobs:
 
                   git config user.name "gitea-actions[bot]"
                   git config user.email "gitea-actions@localhost"
-                  git commit -m "test(playwright): add crawler, generator, and test reports" || echo "No changes to commit"
+                  git commit -m "test(playwright): add crawler, generator, and test reports [skip ci]" || echo "No changes to commit"
                   git push --force origin "HEAD:${GITHUB_REF_NAME}"
