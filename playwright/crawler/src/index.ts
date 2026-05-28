@@ -1,22 +1,22 @@
 import { getConfig } from './shared/config.js';
 import { clearDefaultDataset, ensureStorageDirectories } from './shared/utils.js';
 import { runGuestPhase, runAuthPhase, visitedRoutePatterns } from './discovery/phases.js';
+import { log } from 'crawlee';
 
 async function main(): Promise<void> {
+  const startTime = Date.now();
   try {
-    console.log('=== STARTING PLAYWRIGHT DISCOVERY ===\n');
-
     ensureStorageDirectories();
     const config = getConfig();
     clearDefaultDataset();
     await runGuestPhase(config);
     await runAuthPhase(config);
 
-    console.log('\n=== DISCOVERY COMPLETED ===');
-    console.log(`Total unique routes discovered: ${visitedRoutePatterns.size}`);
-    console.log('JSON datasets are available in storage/datasets/default');
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    log.info(`${visitedRoutePatterns.size} unique routes (${duration}s)`);
+    log.info('Datasets saved to storage/datasets/default');
   } catch (error) {
-    console.error('Crawler error:', error);
+    log.error('Discovery aborted due to a fatal error:', { error });
     process.exit(1);
   }
 }

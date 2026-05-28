@@ -2,6 +2,7 @@ import {
   PlaywrightCrawler,
   Dataset,
   RequestQueue,
+  log,
 } from 'crawlee';
 import { CrawlerConfig } from '../transforms/types.js';
 import { authenticate } from './auth.js';
@@ -11,7 +12,7 @@ import { createQueueName, normalizePathname, toAbsoluteUrl } from '../shared/uti
 export const visitedRoutePatterns = new Set<string>();
 
 export async function runGuestPhase(config: CrawlerConfig): Promise<void> {
-  console.log('PHASE 1: Discovering guest routes');
+  log.info('Discovering guest routes');
 
   const guestQueue = await RequestQueue.open(createQueueName('guest-queue'));
 
@@ -57,7 +58,7 @@ export async function runGuestPhase(config: CrawlerConfig): Promise<void> {
 }
 
 export async function runAuthPhase(config: CrawlerConfig): Promise<void> {
-  console.log('\nPHASE 2: Discovering protected routes');
+  log.info('Discovering auth routes');
 
   const authQueue = await RequestQueue.open(createQueueName('auth-queue'));
 
@@ -88,6 +89,11 @@ export async function runAuthPhase(config: CrawlerConfig): Promise<void> {
         session.userData = session.userData || {};
         if (!session.userData.authenticated) {
           session.userData.authenticated = await authenticate(page, config, log);
+          if (session.userData.authenticated) {
+            log.info('Authentication successful. Proceeding with auth routes.');
+          } else {
+            log.error('Authentication failed. Dependent auth routes will likely be skipped.');
+          }
         }
       },
     ],
