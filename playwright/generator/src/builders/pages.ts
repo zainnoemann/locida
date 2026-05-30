@@ -174,7 +174,7 @@ export class ProfilePage extends BasePage {
         this.emailInput = page.locator('input[name="email"]').first();
         this.saveProfileButton = page.locator('button[type="submit"], input[type="submit"]').first();
         this.currentPasswordInput = page.locator('input[name="current_password"]').first();
-        this.newPasswordInput = page.locator('input[name="password"]').nth(1);
+        this.newPasswordInput = page.locator('input[name="password"]').first();
         this.confirmNewPasswordInput = page.locator('input[name="password_confirmation"]').first();
         this.savePasswordButton = page.locator('button[type="submit"], input[type="submit"]').nth(1);
         this.deleteAccountButton = page.locator('button[data-confirm], form[action*="delete"] button[type="submit"], button[type="submit"][form*="delete"]').first();

@@ -74,6 +74,11 @@ test.describe('Login page — Functionality', () => {
         await loginPage.clickSubmit();
         await loginPage.assertOnLoginPage();
     });
+
+    test('shows error for invalid email format', async () => {
+        await loginPage.login('not-an-email', 'password123');
+        await loginPage.assertOnLoginPage();
+    });
 });
 
 test.describe('Register page — Component', () => {
@@ -88,6 +93,30 @@ test.describe('Register page — Component', () => {
     test('shows email field', async () => { await expect(registerPage.emailInput).toBeVisible(); });
     test('shows password field', async () => { await expect(registerPage.passwordInput).toBeVisible(); });
     test('shows confirm password field', async () => { await expect(registerPage.confirmPasswordInput).toBeVisible(); });
+});
+
+test.describe('Register page — Functionality', () => {
+    let registerPage: RegisterPage;
+
+    test.beforeEach(async ({ page }) => {
+        registerPage = new RegisterPage(page);
+        await registerPage.goto();
+    });
+
+    test('stays on register page when form is empty', async () => {
+        await registerPage.clickSubmit();
+        await registerPage.assertOnRegisterPage();
+    });
+
+    test('shows error when passwords do not match', async () => {
+        await registerPage.register('Test User', 'test@example.com', 'password123', 'password456');
+        await registerPage.assertOnRegisterPage();
+    });
+
+    test('shows error for password too short', async () => {
+        await registerPage.register('Test User', 'test@example.com', '123', '123');
+        await registerPage.assertOnRegisterPage();
+    });
 });
 
 test.describe('Dashboard — Component', () => {
@@ -138,6 +167,26 @@ test.describe('Profile page — Functionality', () => {
     test('save button is enabled', async () => {
         await expect(profilePage.saveProfileButton).toBeEnabled();
     });
+
+    test('shows error when name is cleared', async () => {
+        await profilePage.updateProfile('', TEST_USER.email);
+        await profilePage.assertOnProfilePage();
+    });
+
+    test('shows error for invalid email format', async () => {
+        await profilePage.updateEmail('invalid-email');
+        await profilePage.assertOnProfilePage();
+    });
+
+    test('shows error when passwords do not match', async () => {
+        await profilePage.updatePassword(TEST_USER.password, 'newpassword123', 'differentpassword');
+        await profilePage.assertOnProfilePage();
+    });
+
+    test('shows error for incorrect current password', async () => {
+        await profilePage.updatePassword('wrongpassword', 'newpassword123', 'newpassword123');
+        await profilePage.assertOnProfilePage();
+    });
 });
 `;
 }
@@ -178,6 +227,17 @@ export function generateResourceSpec(resource: ResourceInfo): string {
     const updatedData = hasTitleField
         ? `const updatedLabel = \`Updated-\${Date.now()}\`;\n    await ${fixtureKey}Page.edit${className}ByName(createLabel, { ...${constName}.updated, ${titleFieldName}: updatedLabel });\n    await ${fixtureKey}Page.assert${className}Exists(updatedLabel);`
         : `await ${fixtureKey}Page.edit${className}ByName('', { ...${constName}.updated });`;
+
+    const validationTests = resource.fields
+        .map((f) => {
+            let tests = '';
+            if (f.type === 'email' && f.name) {
+                tests += `\n    test('shows error for invalid email format in ${f.name}', async () => {\n        await ${fixtureKey}Page.create${className}({ ...${constName}.valid, ${f.name}: 'invalid-email' });\n        await ${fixtureKey}Page.assertOnCreatePage();\n    });`;
+            }
+            return tests;
+        })
+        .filter(Boolean)
+        .join('\n');
 
     return `// tests/${resource.name}.spec.ts
 
@@ -248,6 +308,7 @@ ${hasTitleField ? `    await ${fixtureKey}Page.assert${className}Exists(${titleF
         await ${fixtureKey}Page.create${className}({ ...${constName}.valid });
         await ${fixtureKey}Page.assertOnIndexPage();
     });
+${validationTests}
 });
 
 test.describe('${className} edit — Component', () => {
