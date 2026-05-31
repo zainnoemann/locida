@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Throwable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -11,10 +12,11 @@ class GiteaService
     protected string $rootUrl;
     protected string $apiUrl;
     protected string $apiToken;
+    protected const CACHE_TTL_MINUTES = 5;
 
     public function __construct()
     {
-        $this->rootUrl = (string) config('services.gitea.root_url');    
+        $this->rootUrl = (string) config('services.gitea.root_url');
         $this->apiUrl = (string) config('services.gitea.url');
         $this->apiToken = (string) config('services.gitea.token');
     }
@@ -43,9 +45,7 @@ class GiteaService
                 $version = $response->json('version');
 
                 return is_string($version) && $version !== '' ? $version : null;
-            } catch (
-                Throwable $e
-            ) {
+            } catch (Throwable $e) {
                 Log::warning('Exception while fetching Gitea version.', ['message' => $e->getMessage()]);
 
                 return null;
@@ -67,7 +67,7 @@ class GiteaService
 
         $cacheKey = 'gitea.repositories';
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function (): array {
+        return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function (): array {
             try {
                 $response = Http::withToken($this->apiToken)
                     ->timeout(10)
@@ -79,7 +79,7 @@ class GiteaService
                 }
 
                 Log::error('Failed to fetch Gitea repositories.', ['status' => $response->status(), 'response' => $response->body()]);
-            } catch (\Exception $e) {
+            } catch (Throwable $e) {
                 Log::error('Exception while fetching Gitea repositories.', ['message' => $e->getMessage()]);
             }
 
@@ -128,7 +128,7 @@ class GiteaService
 
         $cacheKey = sprintf('gitea.branches.%s.%s', $owner, $repo);
 
-        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($owner, $repo): array {
+        return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($owner, $repo): array {
             return $this->fetchBranches($owner, $repo);
         });
     }

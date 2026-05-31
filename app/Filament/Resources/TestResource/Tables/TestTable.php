@@ -155,7 +155,7 @@ class TestTable
                             $records
                                 ->where('status', Test::STATUS_FAILED)
                                 ->each(function (Test $record) use (&$queued): void {
-                                    GenerateTestJob::dispatch($record);
+                                    GenerateTestJob::dispatch($record->id);
                                     $queued++;
                                 });
 

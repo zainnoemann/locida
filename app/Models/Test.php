@@ -46,4 +46,24 @@ class Test extends Model
             self::STATUS_CANCELLED => 'Cancelled',
         ];
     }
+
+    public function isGenerating(): bool
+    {
+        return $this->status === self::STATUS_GENERATING;
+    }
+
+    public function isFailed(): bool
+    {
+        return $this->status === self::STATUS_FAILED;
+    }
+
+    public function isCompleted(): bool
+    {
+        return $this->status === self::STATUS_COMPLETED;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === self::STATUS_CANCELLED;
+    }
 }

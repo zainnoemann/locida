@@ -56,28 +56,28 @@ class GenerateTest extends Page
     {
         return [
             Action::make('regenerate')
-                ->label(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                ->label(fn(): string => $this->record->isGenerating()
                     ? 'Cancel'
                     : 'Regenerate')
-                ->icon(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                ->icon(fn(): string => $this->record->isGenerating()
                     ? 'heroicon-m-x-circle'
                     : 'heroicon-m-arrow-path')
-                ->color(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                ->color(fn(): string => $this->record->isGenerating()
                     ? 'danger'
                     : 'warning')
                 ->visible(fn(): bool => Auth::check())
                 ->requiresConfirmation()
-                ->modalHeading(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                ->modalHeading(fn(): string => $this->record->isGenerating()
                     ? 'Cancel generation?'
                     : 'Regenerate test?')
-                ->modalSubmitActionLabel(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                ->modalSubmitActionLabel(fn(): string => $this->record->isGenerating()
                     ? 'Cancel'
                     : 'Regenerate')
-                ->modalCancelActionLabel(fn(): string => $this->record->status === Test::STATUS_GENERATING
+                ->modalCancelActionLabel(fn(): string => $this->record->isGenerating()
                     ? 'Keep running'
                     : 'Close')
                 ->action(function (): void {
-                    if ($this->record->status === Test::STATUS_GENERATING) {
+                    if ($this->record->isGenerating()) {
                         if (app(PlaywrightGeneratorService::class)->cancelGeneration($this->record)) {
                             $this->record->refresh();
 
@@ -99,7 +99,7 @@ class GenerateTest extends Page
                         return;
                     }
 
-                    \App\Jobs\GenerateTestJob::dispatch($this->record);
+                    \App\Jobs\GenerateTestJob::dispatch($this->record->id);
                     $this->record->refresh();
 
                     Notification::make()

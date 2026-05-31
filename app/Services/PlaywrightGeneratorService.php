@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Test;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -564,16 +565,16 @@ class PlaywrightGeneratorService
 
         // GET STATE FROM CACHE
         $cacheKey = "test_job_log_state_{$test->id}";
-        $jobLogState = \Illuminate\Support\Facades\Cache::get($cacheKey, []);
+        $jobLogState = Cache::get($cacheKey, []);
 
         $this->streamRunLogsToGeneratorLog($logFile, $apiUrl, $apiToken, $owner, $repo, $runId, $jobLogState);
 
         // SAVE STATE TO CACHE
-        \Illuminate\Support\Facades\Cache::put($cacheKey, $jobLogState, now()->addHours(1));
+        Cache::put($cacheKey, $jobLogState, now()->addHours(1));
 
         if (in_array($status, ['completed', 'success'], true)) {
             $this->flushFinalRunLogs($logFile, $apiUrl, $apiToken, $owner, $repo, $runId, $jobLogState);
-            \Illuminate\Support\Facades\Cache::forget($cacheKey);
+            Cache::forget($cacheKey);
             
             $completedText = "Gitea Actions run #{$runId} completed";
             if ($conclusion !== '') {
@@ -945,7 +946,7 @@ class PlaywrightGeneratorService
             
             $deadline = time() + self::ACTIONS_MAX_WAIT_SECONDS;
             \App\Jobs\PollPlaywrightJob::dispatch(
-                $test,
+                $test->id,
                 $logFile,
                 (string) $test->repo_name,
                 $testBranch,

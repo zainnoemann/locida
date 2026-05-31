@@ -21,17 +21,17 @@ class GenerateTestAction extends Action
     {
         parent::setUp();
 
-        $this->label(fn(Test $record): string => $record->status === Test::STATUS_GENERATING
+        $this->label(fn(Test $record): string => $record->isGenerating()
                 ? 'Cancel'
                 : 'Generate')
-            ->icon(fn(Test $record): string => $record->status === Test::STATUS_GENERATING
+            ->icon(fn(Test $record): string => $record->isGenerating()
                 ? 'heroicon-m-x-circle'
                 : 'heroicon-o-play')
-            ->color(fn(Test $record): string => $record->status === Test::STATUS_GENERATING
+            ->color(fn(Test $record): string => $record->isGenerating()
                 ? 'danger'
                 : 'success')
             ->visible(fn(Test $record): bool => Auth::check())
-            ->requiresConfirmation(fn(Test $record): bool => in_array($record->status, [Test::STATUS_FAILED, Test::STATUS_GENERATING], true))
+            ->requiresConfirmation(fn(Test $record): bool => $record->isFailed() || $record->isGenerating())
             ->modalHeading(fn(Test $record): ?string => match ($record->status) {
                 Test::STATUS_FAILED => 'Failed test action',
                 Test::STATUS_GENERATING => 'Generation in progress',
@@ -56,7 +56,7 @@ class GenerateTestAction extends Action
             })
             ->successRedirectUrl(fn(Test $record): string => TestResource::getUrl('generate', ['record' => $record]))
             ->action(function (Test $record, array $arguments): void {
-                if ($record->status === Test::STATUS_GENERATING) {
+                if ($record->isGenerating()) {
                     $selectedAction = (string) ($arguments['generation_action'] ?? 'view');
 
                     if ($selectedAction === 'cancel') {
@@ -91,7 +91,7 @@ class GenerateTestAction extends Action
                     return;
                 }
 
-                if (in_array($record->status, [Test::STATUS_COMPLETED, 'complete'], true)) {
+                if ($record->isCompleted()) {
                     Notification::make()
                         ->success()
                         ->title('Opening generation log')
@@ -101,11 +101,11 @@ class GenerateTestAction extends Action
                     return;
                 }
 
-                if ($record->status === Test::STATUS_FAILED) {
+                if ($record->isFailed()) {
                     $selectedAction = (string) ($arguments['failed_action'] ?? 'view');
 
                     if ($selectedAction === 'retry') {
-                        GenerateTestJob::dispatch($record);
+                        GenerateTestJob::dispatch($record->id);
                         $record->refresh();
 
                         Notification::make()
@@ -127,7 +127,7 @@ class GenerateTestAction extends Action
                     return;
                 }
 
-                GenerateTestJob::dispatch($record);
+                GenerateTestJob::dispatch($record->id);
                 $record->refresh();
 
                 Notification::make()
