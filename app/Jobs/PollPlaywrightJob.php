@@ -15,7 +15,6 @@ class PollPlaywrightJob implements ShouldQueue
     public ?int $trackedRunId;
 
     public int $timeout = 120; // 2 minutes max per run
-    public int $tries = 1000; // allow many retries because we use release
 
     public function __construct(
         public readonly int $testId,
@@ -27,6 +26,11 @@ class PollPlaywrightJob implements ShouldQueue
         ?int $trackedRunId = null
     ) {
         $this->trackedRunId = $trackedRunId;
+    }
+
+    public function retryUntil(): \DateTimeInterface
+    {
+        return \Carbon\Carbon::createFromTimestamp($this->deadline);
     }
 
     public function handle(PlaywrightGeneratorService $generatorService): void
