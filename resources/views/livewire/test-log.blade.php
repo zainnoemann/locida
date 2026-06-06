@@ -1,34 +1,41 @@
+{{-- 
+    Livewire Component View: Test Log
+    Purpose: Renders the real-time test generation log and a visual timeline representing the stages of the generation process.
+    The component polls every second to update the UI as new logs arrive.
+--}}
 <div wire:poll.1s>
     @php
+    // Extract timeline data from the Livewire component property
     $timeline = $this->timeline;
     $stages = $timeline['stages'];
     $statusText = [
-    'done' => 'Done',
-    'active' => 'In Progress',
-    'pending' => 'Pending',
-    'failed' => 'Failed',
-    'cancelled' => 'Cancelled',
+        'done' => 'Done',
+        'active' => 'In Progress',
+        'pending' => 'Pending',
+        'failed' => 'Failed',
+        'cancelled' => 'Cancelled',
     ];
+    // Define color mappings for timeline nodes, labels, and connecting lines based on stage status
     $nodeClasses = [
-    'done' => 'border-emerald-500 bg-emerald-500',
-    'active' => 'border-amber-500 bg-amber-500 animate-pulse',
-    'pending' => 'border-gray-400 bg-white',
-    'failed' => 'border-rose-500 bg-rose-500',
-    'cancelled' => 'border-slate-500 bg-slate-500',
+        'done' => 'border-emerald-500 bg-emerald-500',
+        'active' => 'border-amber-500 bg-amber-500 animate-pulse',
+        'pending' => 'border-gray-400 bg-white',
+        'failed' => 'border-rose-500 bg-rose-500',
+        'cancelled' => 'border-slate-500 bg-slate-500',
     ];
     $labelClasses = [
-    'done' => 'text-emerald-700 dark:text-emerald-300',
-    'active' => 'text-amber-700 dark:text-amber-300',
-    'pending' => 'text-gray-600 dark:text-gray-400',
-    'failed' => 'text-rose-700 dark:text-rose-300',
-    'cancelled' => 'text-slate-600 dark:text-slate-300',
+        'done' => 'text-emerald-700 dark:text-emerald-300',
+        'active' => 'text-amber-700 dark:text-amber-300',
+        'pending' => 'text-gray-600 dark:text-gray-400',
+        'failed' => 'text-rose-700 dark:text-rose-300',
+        'cancelled' => 'text-slate-600 dark:text-slate-300',
     ];
     $lineClasses = [
-    'done' => 'bg-emerald-500',
-    'active' => 'bg-amber-500',
-    'pending' => 'bg-gray-300 dark:bg-gray-700',
-    'failed' => 'bg-rose-500',
-    'cancelled' => 'bg-slate-500',
+        'done' => 'bg-emerald-500',
+        'active' => 'bg-amber-500',
+        'pending' => 'bg-gray-300 dark:bg-gray-700',
+        'failed' => 'bg-rose-500',
+        'cancelled' => 'bg-slate-500',
     ];
     @endphp
 
@@ -40,6 +47,7 @@
         </div>
         @endif
 
+        {{-- Scoped CSS for the horizontal timeline visualization --}}
         <style>
             .tl-container { width: 100%; height: 160px; position: relative; display: flex; align-items: flex-start; justify-content: space-between; padding: 2.5rem 6rem 0 6rem; }
             .tl-node-wrap { position: relative; display: flex; flex-direction: column; align-items: center; z-index: 10; width: 0; }
@@ -64,6 +72,7 @@
             <div class="tl-container">
                 @foreach ($stages as $index => $stage)
                 @php
+                    // Determine the color theme for the current stage node
                     $colorName = 'primary';
                     if ($stage['status'] === 'pending') {
                         $colorName = 'gray';
@@ -76,9 +85,11 @@
                     $textClass = "text-{$colorName}-c";
                 @endphp
 
+                {{-- Render a timeline node --}}
                 <div class="tl-node-wrap">
                     <div class="tl-node">
                         <div class="tl-node-inner {{ $bgClass }}"></div>
+                        {{-- Add pulsing animation if the stage is currently running --}}
                         @if($stage['status'] === 'active')
                             <div class="tl-node-pulse {{ $bgClass }}"></div>
                         @endif
@@ -91,11 +102,13 @@
                     </div>
                 </div>
 
+                {{-- Render the connecting line segment between nodes --}}
                 @if (!$loop->last)
                     @php
                         $nextStage = $stages[$index + 1];
                         $lineColorName = 'gray';
                         
+                        // Line color reflects the status of the *next* stage
                         if ($nextStage['status'] !== 'pending') {
                             $lineColorName = 'primary';
                             if ($nextStage['status'] === 'failed') {
@@ -115,6 +128,7 @@
     @endif
 
     @if ($viewType === 'both' || $viewType === 'stream')
+    {{-- Terminal-style log output container --}}
     <div class="rounded-lg border border-gray-200 bg-gray-950 p-3 sm:p-4 overflow-hidden">
         <div
             class="h-96 max-w-full overflow-x-auto overflow-y-auto rounded-md border border-gray-800 bg-gray-950 p-3"
@@ -123,12 +137,12 @@
         </div>
     </div>
 
+    {{-- Auto-scroll script: scrolls to bottom automatically if the user is already near the bottom --}}
     <script>
         document.addEventListener('livewire:initialized', () => {
             setInterval(() => {
                 const container = document.getElementById('log-container-{{ $testId }}');
                 if (container) {
-                    // Only auto-scroll if user is already near the bottom
                     const isNearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
                     if (isNearBottom) {
                         container.scrollTop = container.scrollHeight;

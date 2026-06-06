@@ -5,43 +5,38 @@ namespace App\Filament\Resources\TestResource\Actions;
 use App\Filament\Resources\TestResource;
 use App\Jobs\GenerateTestJob;
 use App\Models\Test;
-use App\Services\PlaywrightGeneratorService;
+use App\Services\TestService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Auth;
 
 class GenerateTestAction extends Action
 {
-    public static function getDefaultName(): ?string
-    {
-        return 'generate';
-    }
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->label(fn(Test $record): string => $record->isGenerating()
+        $this->label(fn (Test $record): string => $record->isGenerating()
                 ? 'Cancel'
                 : 'Generate')
-            ->icon(fn(Test $record): string => $record->isGenerating()
+            ->icon(fn (Test $record): string => $record->isGenerating()
                 ? 'heroicon-m-x-circle'
                 : 'heroicon-o-play')
-            ->color(fn(Test $record): string => $record->isGenerating()
+            ->color(fn (Test $record): string => $record->isGenerating()
                 ? 'danger'
                 : 'success')
-            ->visible(fn(Test $record): bool => Auth::check())
-            ->requiresConfirmation(fn(Test $record): bool => $record->isFailed() || $record->isGenerating())
-            ->modalHeading(fn(Test $record): ?string => match ($record->status) {
+            ->visible(fn (Test $record): bool => Auth::check())
+            ->requiresConfirmation(fn (Test $record): bool => $record->isFailed() || $record->isGenerating())
+            ->modalHeading(fn (Test $record): ?string => match ($record->status) {
                 Test::STATUS_FAILED => 'Failed test action',
                 Test::STATUS_GENERATING => 'Generation in progress',
                 default => null,
             })
-            ->modalSubmitAction(fn(Action $action): Action => $action
+            ->modalSubmitAction(fn (Action $action): Action => $action
                 ->label('View')
                 ->color('success'))
-            ->modalCancelAction(fn(Action $action): Action => $action->hidden())
-            ->extraModalFooterActions(fn(Action $action): array => match ($action->getRecord()?->status) {
+            ->modalCancelAction(fn (Action $action): Action => $action->hidden())
+            ->extraModalFooterActions(fn (Action $action): array => match ($action->getRecord()?->status) {
                 Test::STATUS_FAILED => [
                     $action->makeModalSubmitAction('retry', arguments: ['failed_action' => 'retry'])
                         ->label('Retry')
@@ -54,13 +49,13 @@ class GenerateTestAction extends Action
                 ],
                 default => [],
             })
-            ->successRedirectUrl(fn(Test $record): string => TestResource::getUrl('generate', ['record' => $record]))
+            ->successRedirectUrl(fn (Test $record): string => TestResource::getUrl('generate', ['record' => $record]))
             ->action(function (Test $record, array $arguments): void {
                 if ($record->isGenerating()) {
                     $selectedAction = (string) ($arguments['generation_action'] ?? 'view');
 
                     if ($selectedAction === 'cancel') {
-                        if (app(PlaywrightGeneratorService::class)->cancelGeneration($record)) {
+                        if (app(TestService::class)->cancelGeneration($record)) {
                             $record->refresh();
 
                             Notification::make()
@@ -136,5 +131,9 @@ class GenerateTestAction extends Action
                     ->body('Log stream is now live.')
                     ->send();
             });
+    }
+    public static function getDefaultName(): ?string
+    {
+        return 'generate';
     }
 }

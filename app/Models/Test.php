@@ -4,8 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Eloquent model representing a Playwright Test generation request.
+ * Tracks the repository coordinates, configuration credentials, 
+ * and the chronological lifecycle state of the generation process.
+ */
 class Test extends Model
 {
+    /** Lifecycle state constants */
     public const STATUS_NONE = 'none';
     public const STATUS_GENERATING = 'generating';
     public const STATUS_COMPLETED = 'completed';
@@ -36,6 +42,11 @@ class Test extends Model
         'generated_at' => 'datetime',
     ];
 
+    /**
+     * Provides a mapping of internal statuses to human-readable labels.
+     *
+     * @return array<string, string>
+     */
     public static function statusOptions(): array
     {
         return [
@@ -47,21 +58,33 @@ class Test extends Model
         ];
     }
 
+    /**
+     * Checks if the test is currently in the active generation phase.
+     */
     public function isGenerating(): bool
     {
         return $this->status === self::STATUS_GENERATING;
     }
 
+    /**
+     * Checks if the test generation process encountered an unrecoverable error.
+     */
     public function isFailed(): bool
     {
         return $this->status === self::STATUS_FAILED;
     }
 
+    /**
+     * Checks if the test generation process finished successfully.
+     */
     public function isCompleted(): bool
     {
         return $this->status === self::STATUS_COMPLETED;
     }
 
+    /**
+     * Checks if the test generation was manually aborted.
+     */
     public function isCancelled(): bool
     {
         return $this->status === self::STATUS_CANCELLED;

@@ -3,26 +3,34 @@
 namespace App\Filament\Resources\TestResource\Pages;
 
 use App\Filament\Resources\TestResource;
+use App\Jobs\GenerateTestJob;
 use App\Models\Test;
-use App\Services\PlaywrightGeneratorService;
+use App\Services\TestService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Custom Filament page displaying the live generation status of a Playwright test.
+ * Embeds Livewire log views and handles header actions to dispatch or abort generation jobs.
+ */
 class GenerateTest extends Page
 {
+    public Test $record;
     protected static string $resource = TestResource::class;
 
     protected string $view = 'filament.pages.generate-test';
-
-    public Test $record;
 
     public function mount(Test $record): void
     {
         $this->record = $record;
     }
 
+    /**
+     * Refreshes the model state before each Livewire request to ensure
+     * header buttons reflect the latest DB status (e.g., generating vs completed).
+     */
     public function hydrate(): void
     {
         $this->record->refresh();
@@ -52,33 +60,38 @@ class GenerateTest extends Page
         ];
     }
 
+    /**
+     * Configures the dynamic "Regenerate" / "Cancel" action button.
+     * The behavior and appearance toggle based on whether the test is currently generating.
+     */
     protected function getHeaderActions(): array
     {
         return [
             Action::make('regenerate')
-                ->label(fn(): string => $this->record->isGenerating()
+                ->label(fn (): string => $this->record->isGenerating()
                     ? 'Cancel'
                     : 'Regenerate')
-                ->icon(fn(): string => $this->record->isGenerating()
+                ->icon(fn (): string => $this->record->isGenerating()
                     ? 'heroicon-m-x-circle'
                     : 'heroicon-m-arrow-path')
-                ->color(fn(): string => $this->record->isGenerating()
+                ->color(fn (): string => $this->record->isGenerating()
                     ? 'danger'
                     : 'warning')
-                ->visible(fn(): bool => Auth::check())
+                ->visible(fn (): bool => Auth::check())
                 ->requiresConfirmation()
-                ->modalHeading(fn(): string => $this->record->isGenerating()
+                ->modalHeading(fn (): string => $this->record->isGenerating()
                     ? 'Cancel generation?'
                     : 'Regenerate test?')
-                ->modalSubmitActionLabel(fn(): string => $this->record->isGenerating()
+                ->modalSubmitActionLabel(fn (): string => $this->record->isGenerating()
                     ? 'Cancel'
                     : 'Regenerate')
-                ->modalCancelActionLabel(fn(): string => $this->record->isGenerating()
+                ->modalCancelActionLabel(fn (): string => $this->record->isGenerating()
                     ? 'Keep running'
                     : 'Close')
                 ->action(function (): void {
+                    // Logic to abort an actively running job
                     if ($this->record->isGenerating()) {
-                        if (app(PlaywrightGeneratorService::class)->cancelGeneration($this->record)) {
+                        if (app(TestService::class)->cancelGeneration($this->record)) {
                             $this->record->refresh();
 
                             Notification::make()
@@ -99,7 +112,8 @@ class GenerateTest extends Page
                         return;
                     }
 
-                    \App\Jobs\GenerateTestJob::dispatch($this->record->id);
+                    // Logic to dispatch a fresh generation request
+                    GenerateTestJob::dispatch($this->record->id);
                     $this->record->refresh();
 
                     Notification::make()

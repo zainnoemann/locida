@@ -2,7 +2,14 @@
 
 namespace App\Filament\Resources\TestResource\Schemas;
 
+use App\Models\Test;
+use App\Services\GiteaService;
+use Closure;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class TestForm
 {
@@ -10,12 +17,12 @@ class TestForm
     {
         return $schema
             ->components([
-                \Filament\Forms\Components\Select::make('repo_url')
+                Select::make('repo_url')
                     ->label('Source Repository')
-                    ->options(function (callable $get, \App\Services\GiteaService $giteaService) {
-                        $repos = collect($giteaService->getRepositories())
-                            ->filter(fn($repo) => is_array($repo) && isset($repo['clone_url'], $repo['full_name']))
-                            ->mapWithKeys(fn($repo) => [$repo['clone_url'] => $repo['full_name']]);
+                    ->options(function (callable $get, GiteaService $gitea) {
+                        $repos = collect($gitea->getRepositories())
+                            ->filter(fn ($repo) => is_array($repo) && isset($repo['clone_url'], $repo['full_name']))
+                            ->mapWithKeys(fn ($repo) => [$repo['clone_url'] => $repo['full_name']]);
 
                         $current = trim((string) ($get('repo_url') ?? ''));
                         $currentName = trim((string) ($get('repo_name') ?? ''));
@@ -31,9 +38,9 @@ class TestForm
                     ->preload()
                     ->required()
                     ->live()
-                    ->afterStateUpdated(function ($state, callable $set, \App\Services\GiteaService $giteaService) {
-                        $repo = collect($giteaService->getRepositories())
-                            ->first(fn($item) => is_array($item) && ($item['clone_url'] ?? null) === $state);
+                    ->afterStateUpdated(function ($state, callable $set, GiteaService $gitea) {
+                        $repo = collect($gitea->getRepositories())
+                            ->first(fn ($item) => is_array($item) && ($item['clone_url'] ?? null) === $state);
 
                         if (! is_array($repo)) {
                             return;
@@ -43,17 +50,17 @@ class TestForm
                         $set('repo_name', $repo['full_name'] ?? '');
                         $set('source_branch', $repo['default_branch'] ?? 'main');
                     }),
-                \Filament\Forms\Components\TextInput::make('name')
+                TextInput::make('name')
                     ->label('Test Name')
                     ->placeholder('Enter test name')
                     ->required()
                     ->maxLength(255),
-                \Filament\Forms\Components\TextInput::make('repo_name')
+                TextInput::make('repo_name')
                     ->label('Repository Name')
                     ->placeholder('Enter repository name')
                     ->required()
-                    ->rule(function (callable $get, ?\App\Models\Test $record): \Closure {
-                        return function (string $attribute, mixed $value, \Closure $fail) use ($get, $record): void {
+                    ->rule(function (callable $get, ?Test $record): Closure {
+                        return function (string $attribute, mixed $value, Closure $fail) use ($get, $record): void {
                             $repoName = trim((string) $value);
                             $sourceBranch = trim((string) ($get('source_branch') ?? ''));
                             $testBranch = trim((string) ($get('test_branch') ?? ''));
@@ -62,7 +69,7 @@ class TestForm
                                 return;
                             }
 
-                            $query = \App\Models\Test::query()
+                            $query = Test::query()
                                 ->where('repo_name', $repoName)
                                 ->where('source_branch', $sourceBranch)
                                 ->where('test_branch', $testBranch);
@@ -77,16 +84,16 @@ class TestForm
                         };
                     })
                     ->maxLength(255),
-                \Filament\Forms\Components\Select::make('source_branch')
+                Select::make('source_branch')
                     ->label('Source Branch')
-                    ->options(function (callable $get, \App\Services\GiteaService $giteaService): array {
+                    ->options(function (callable $get, GiteaService $gitea): array {
                         $repoUrl = (string) ($get('repo_url') ?? '');
                         if ($repoUrl === '') {
                             return [];
                         }
 
-                        $branches = collect($giteaService->getBranchesByCloneUrl($repoUrl))
-                            ->filter(fn($branch) => is_string($branch) && $branch !== '')
+                        $branches = collect($gitea->getBranchesByCloneUrl($repoUrl))
+                            ->filter(fn ($branch) => is_string($branch) && $branch !== '')
                             ->values();
 
                         $current = (string) ($get('source_branch') ?? '');
@@ -95,7 +102,7 @@ class TestForm
                         }
 
                         return $branches
-                            ->mapWithKeys(fn(string $branch): array => [$branch => $branch])
+                            ->mapWithKeys(fn (string $branch): array => [$branch => $branch])
                             ->all();
                     })
                     ->placeholder('Select a branch')
@@ -104,15 +111,15 @@ class TestForm
                     ->helperText('Select the source repository branch used for test generation.')
                     ->searchable()
                     ->preload()
-                    ->disabled(fn(callable $get): bool => empty($get('repo_url')))
+                    ->disabled(fn (callable $get): bool => empty($get('repo_url')))
                     ->live(),
-                \Filament\Forms\Components\TextInput::make('test_branch')
+                TextInput::make('test_branch')
                     ->label('Test Branch')
                     ->placeholder('Enter test branch name')
                     ->required()
                     ->default('playwright')
-                    ->rule(function (callable $get, \App\Services\GiteaService $giteaService, ?\App\Models\Test $record): \Closure {
-                        return function (string $attribute, mixed $value, \Closure $fail) use ($get, $giteaService, $record): void {
+                    ->rule(function (callable $get, GiteaService $gitea, ?Test $record): Closure {
+                        return function (string $attribute, mixed $value, Closure $fail) use ($get, $gitea, $record): void {
                             $branchName = trim((string) $value);
                             if ($branchName === '') {
                                 return;
@@ -131,20 +138,20 @@ class TestForm
                                 return;
                             }
 
-                            $existingBranches = $giteaService->getBranchesByCloneUrl($repoUrl, false);
+                            $existingBranches = $gitea->getBranchesByCloneUrl($repoUrl, false);
                             if (in_array($branchName, $existingBranches, true)) {
                                 $fail('Test branch already exists in the repository. Please use a different branch name.');
                             }
                         };
                     })
                     ->maxLength(255),
-                \Filament\Forms\Components\TextInput::make('app_url')
+                TextInput::make('app_url')
                     ->label('App URL')
                     ->placeholder('Enter App URL')
                     ->url()
                     ->required()
-                    ->rule(function (): \Closure {
-                        return function (string $attribute, mixed $value, \Closure $fail): void {
+                    ->rule(function (): Closure {
+                        return function (string $attribute, mixed $value, Closure $fail): void {
                             $candidate = trim((string) $value);
                             if ($candidate === '') {
                                 return;
@@ -177,7 +184,7 @@ class TestForm
                             }
 
                             try {
-                                $headResponse = \Illuminate\Support\Facades\Http::timeout(10)
+                                $headResponse = Http::timeout(10)
                                     ->retry(1, 200)
                                     ->withOptions(['allow_redirects' => true])
                                     ->head($candidate);
@@ -187,7 +194,7 @@ class TestForm
                                 }
 
                                 if (in_array($headResponse->status(), [405, 501], true)) {
-                                    $getResponse = \Illuminate\Support\Facades\Http::timeout(10)
+                                    $getResponse = Http::timeout(10)
                                         ->retry(1, 200)
                                         ->withOptions(['allow_redirects' => true])
                                         ->get($candidate);
@@ -202,7 +209,7 @@ class TestForm
                                 }
 
                                 $fail("App URL is unreachable (HTTP {$headResponse->status()}).");
-                            } catch (\Throwable $exception) {
+                            } catch (Throwable $exception) {
                                 $message = strtolower($exception->getMessage());
 
                                 if (str_contains($message, 'curl error 28') || str_contains($message, 'timed out')) {
@@ -216,13 +223,13 @@ class TestForm
                         };
                     })
                     ->maxLength(2048),
-                \Filament\Forms\Components\TextInput::make('test_email')
+                TextInput::make('test_email')
                     ->label('Test Account Email')
                     ->placeholder('Enter test account email')
                     ->email()
                     ->required()
                     ->maxLength(255),
-                \Filament\Forms\Components\TextInput::make('test_password')
+                TextInput::make('test_password')
                     ->label('Test Account Password')
                     ->placeholder('Enter test account password')
                     ->password()

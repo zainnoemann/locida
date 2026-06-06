@@ -14,6 +14,11 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 
+/**
+ * Filament Resource representing Playwright Tests.
+ * Binds the Test Eloquent model to the admin panel, delegating form and table
+ * configurations to dedicated schema classes.
+ */
 class TestResource extends Resource
 {
     protected static ?string $model = Test::class;
