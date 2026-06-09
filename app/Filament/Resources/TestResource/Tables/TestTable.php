@@ -132,8 +132,8 @@ class TestTable
                     ->query(fn (Builder $query): Builder => $query->where('status', Test::STATUS_FAILED)),
             ])
             ->defaultSort('generated_at', 'desc')
-            ->paginated([10, 25, 50, 100])
-            ->defaultPaginationPageOption(25)
+            ->paginated([5, 10, 25, 50, 100])
+            ->defaultPaginationPageOption(5)
             ->emptyStateHeading('No tests configured')
             ->emptyStateDescription('Create a test source first, then run generation from the table action.')
             ->emptyStateIcon('heroicon-o-beaker')

@@ -117,7 +117,6 @@ class TestForm
                     ->label('Test Branch')
                     ->placeholder('Enter test branch name')
                     ->required()
-                    ->default('playwright')
                     ->rule(function (callable $get, GiteaService $gitea, ?Test $record): Closure {
                         return function (string $attribute, mixed $value, Closure $fail) use ($get, $gitea, $record): void {
                             $branchName = trim((string) $value);
