@@ -4,7 +4,9 @@
 [![Act Runner](https://img.shields.io/badge/Act%20Runner-latest-1F6FEB)](https://docs.gitea.com/usage/actions/act-runner)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-Reference guide for running the bundled local Gitea + Gitea Actions runner stack in this repository.
+Reference guide for running the bundled local Gitea + Gitea Actions runner stack used by LOCIDA.
+
+This document is the companion guide for the Gitea-related setup referenced from [README.md](README.md).
 
 Quick links:
 [Quick Start](#quick-start) • [Initial Setup](#initial-setup) • [Runner Setup](#runner-setup) • [Daily Commands](#daily-commands) • [Troubleshooting](#troubleshooting)
@@ -31,6 +33,7 @@ This repository ships with two Gitea-related services in `docker-compose.yml`:
 - `act-runner`: self-hosted Gitea Actions runner
 
 The runner auto-registers on first boot when `GITEA_RUNNER_REGISTRATION_TOKEN` is provided.
+The LOCIDA application uses this stack to discover repositories, fetch branches, and browse generated artifacts.
 
 ## Services
 
@@ -43,11 +46,12 @@ The runner auto-registers on first boot when `GITEA_RUNNER_REGISTRATION_TOKEN` i
 
 - Docker Desktop (or Docker Engine + Docker Compose plugin)
 - Repository cloned locally
-- `GITEA_RUNNER_REGISTRATION_TOKEN` value (generated from Gitea UI)
+- `GITEA_RUNNER_REGISTRATION_TOKEN` value generated from the Gitea UI
+- A Gitea user account with a personal access token (PAT) if you want LOCIDA to talk to the Gitea API
 
 ## Quick Start
 
-1. Start only the Gitea stack (or start all services if preferred).
+1. Start only the Gitea stack, or start all services if you want the runner and app online together.
 
 ```bash
 docker compose up -d gitea act-runner
@@ -83,7 +87,7 @@ docker compose up -d --force-recreate act-runner
 When opening `http://localhost:3000` for the first time:
 
 - Keep most defaults from Gitea installer unless you have custom needs.
-- Set `ROOT_URL` to the URL you actually use.
+- Set `ROOT_URL` to the URL you actually use. For this repository, that is usually `http://localhost:3000`.
 - After install, log in and create your first repository.
 
 Optional local clone examples:
@@ -114,16 +118,27 @@ docker compose up -d --force-recreate act-runner
 
 5. Verify runner is online from Gitea UI.
 
+Notes:
+
+- The runner container mounts `/var/run/docker.sock`, so Docker must be available on the host.
+- If the runner does not register, the token is usually wrong, expired, or missing from `.env`.
+
 ## Environment Variables
 
 Variables used by the Laravel app and runner integration:
 
 | Variable | Description | Example |
 | --- | --- | --- |
-| `GITEA_ROOT_URL` | Canonical base URL used by Gitea for links and notifications | `<URL>` |
+| `GITEA_ROOT_URL` | Canonical base URL used by Gitea for links and notifications | `http://localhost:3000` |
 | `GITEA_API_URL` | Gitea API base URL for app integration | `http://gitea:3000/api/v1` |
 | `GITEA_API_TOKEN` | Personal access token for API calls | `<PAT>` |
 | `GITEA_RUNNER_REGISTRATION_TOKEN` | Token used by `act-runner` auto-registration | `<registration_token>` |
+
+Integration notes for LOCIDA:
+
+- `GITEA_API_URL` should usually point to `http://gitea:3000/api/v1` when the app runs inside the same Compose network.
+- `GITEA_API_TOKEN` must belong to a user that can read the repositories you want to select in the Filament form.
+- `GITEA_RUNNER_REGISTRATION_TOKEN` is only needed for the runner container; the Laravel app does not use it directly.
 
 ## Daily Commands
 
@@ -136,6 +151,8 @@ Variables used by the Laravel app and runner integration:
 | View runner logs | `docker compose logs -f act-runner` |
 | Stop Gitea stack | `docker compose stop gitea act-runner` |
 | Stop and remove Gitea stack | `docker compose down` |
+
+If you want to restart the full integration stack including the app, use `docker compose up -d --build` from the repository root.
 
 ## Port Mapping
 
@@ -163,6 +180,10 @@ docker compose logs -f act-runner
 ```
 
 Ensure `.env` contains valid `GITEA_RUNNER_REGISTRATION_TOKEN`, then recreate `act-runner`.
+
+If the PAT cannot access repositories from the Filament form, verify the token scope and the account's repository visibility.
+
+If Gitea links or notifications point to the wrong address, check `GITEA_ROOT_URL` and restart the `gitea` container.
 
 Check Gitea availability from inside runner network:
 
