@@ -22,7 +22,7 @@ class TestLog extends Component
     private const TIMELINE_STAGES = [
         ['key' => 'start', 'label' => 'Start', 'marker' => 'Starting generator process'],
         ['key' => 'init', 'label' => 'Test Initialization', 'marker' => 'Cloning source'],
-        ['key' => 'generate', 'label' => 'Test Generation', 'marker' => 'Starting the generator'],
+        ['key' => 'generate', 'label' => 'Test Generation', 'marker' => 'Discovering guest routes'],
         ['key' => 'execute', 'label' => 'Test Execution', 'marker' => 'tests using '],
         ['key' => 'report', 'label' => 'Test Reporting', 'marker' => 'Playwright report available'],
         ['key' => 'done', 'label' => 'Completed', 'marker' => 'Done.'],
@@ -229,7 +229,7 @@ class TestLog extends Component
                 if (!empty($matches[1])) {
                     $stageTimestamps[$s['key']] = Carbon::createFromFormat('Y-m-d H:i:s', $matches[1]);
                 } elseif (!empty($matches[2])) {
-                    $stageTimestamps[$s['key']] = Carbon::createFromFormat('Y-m-d H:i:s', str_replace('T', ' ', $matches[2]));
+                    $stageTimestamps[$s['key']] = Carbon::createFromFormat('Y-m-d H:i:s', str_replace('T', ' ', $matches[2]), 'UTC')->setTimezone(config('app.timezone', 'UTC'));
                 }
             }
         }
