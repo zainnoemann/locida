@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\GitInterface;
 use App\Models\Test;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
@@ -18,7 +19,7 @@ class TestRunnerService
     private const ACTIONS_MAX_WAIT_SECONDS = 900;
 
     public function __construct(
-        private GiteaService $gitea
+        private GitInterface $git
     ) {
     }
 
@@ -30,8 +31,9 @@ class TestRunnerService
      */
     public function prepareWorkflow(string $outputDir, Test $test): void
     {
-        $sourceWorkflowFile = base_path('playwright/playwright.yml');
-        $targetWorkflowDir = $outputDir . '/.gitea/workflows';
+        $git = config('services.git.default', 'gitea');
+        $sourceWorkflowFile = base_path("playwright/playwright-{$git}.yml");
+        $targetWorkflowDir = $outputDir . ($git === 'github' ? '/.github/workflows' : '/.gitea/workflows');
 
         if (File::exists($targetWorkflowDir)) {
             File::deleteDirectory($targetWorkflowDir);
@@ -41,22 +43,25 @@ class TestRunnerService
         if (File::exists($sourceWorkflowFile)) {
             $content = File::get($sourceWorkflowFile);
 
+
             if (!empty($test->test_email)) {
-                $content = str_replace(
-                    'TEST_EMAIL: playwright@example.com',
+                $content = preg_replace(
+                    '/TEST_EMAIL:\s*.+/',
                     'TEST_EMAIL: ' . $test->test_email,
                     $content
                 );
             }
             if (!empty($test->test_password)) {
-                $content = str_replace(
-                    'TEST_PASSWORD: playwright',
+                $content = preg_replace(
+                    '/TEST_PASSWORD:\s*.+/',
                     'TEST_PASSWORD: ' . $test->test_password,
                     $content
                 );
             }
 
             File::put($targetWorkflowDir . '/playwright.yml', $content);
+        } else {
+            Log::error("Workflow source file not found: {$sourceWorkflowFile}");
         }
     }
 
@@ -122,7 +127,7 @@ class TestRunnerService
         ];
 
         foreach ($queryVariants as $query) {
-            $json = $this->gitea->getActionRuns($owner, $repo, $query);
+            $json = $this->git->getActionRuns($owner, $repo, $query);
             $runs = [];
 
             // Accommodate Gitea API structure differences (workflow_runs vs runs)
@@ -181,7 +186,7 @@ class TestRunnerService
             return null;
         }
 
-        $json = $this->gitea->getActionRun($owner, $repo, $runId);
+        $json = $this->git->getActionRun($owner, $repo, $runId);
         if (! is_array($json)) {
             return null;
         }
@@ -203,7 +208,7 @@ class TestRunnerService
             return [];
         }
 
-        $json = $this->gitea->getRunJobs($owner, $repo, $runId);
+        $json = $this->git->getRunJobs($owner, $repo, $runId);
         $jobs = [];
         if (is_array($json['jobs'] ?? null)) {
             $jobs = $json['jobs'];
@@ -293,7 +298,7 @@ class TestRunnerService
             return null;
         }
 
-        $body = $this->gitea->getJobLog($owner, $repo, $jobId);
+        $body = $this->git->getJobLog($owner, $repo, $jobId);
         if ($body === '') {
             return null;
         }

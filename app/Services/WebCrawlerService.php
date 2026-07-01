@@ -66,55 +66,7 @@ class WebCrawlerService
         return rtrim($candidate, '/');
     }
 
-    /**
-     * Validates that the target URL is accessible via a simple HTTP request.
-     * It attempts a HEAD request first for efficiency, falling back to a GET request if unsupported.
-     *
-     * @param string $targetUrl The resolved URL to validate.
-     * @return string|null Returns an error message string if validation fails, or null if successful.
-     */
-    public function validateTargetUrl(string $targetUrl): ?string
-    {
-        if (! filter_var($targetUrl, FILTER_VALIDATE_URL)) {
-            return 'App URL is invalid.';
-        }
 
-        try {
-            // Prefer HEAD request to verify connectivity without downloading the response body
-            $headResponse = Http::timeout(10)
-                ->retry(1, 200)
-                ->withOptions(['allow_redirects' => true])
-                ->head($targetUrl);
-
-            if ($headResponse->successful()) {
-                return null;
-            }
-
-            // Some servers reject HEAD requests with 405 (Method Not Allowed) or 501 (Not Implemented)
-            if (in_array($headResponse->status(), [405, 501], true)) {
-                $getResponse = Http::timeout(10)
-                    ->retry(1, 200)
-                    ->withOptions(['allow_redirects' => true])
-                    ->get($targetUrl);
-
-                if ($getResponse->successful()) {
-                    return null;
-                }
-
-                return "App URL is unreachable (HTTP {$getResponse->status()}).";
-            }
-
-            return "App URL is unreachable (HTTP {$headResponse->status()}).";
-        } catch (Throwable $exception) {
-            $message = strtolower($exception->getMessage());
-
-            if (str_contains($message, 'curl error 28') || str_contains($message, 'timed out')) {
-                return 'App URL timed out.';
-            }
-
-            return 'App URL is unreachable.';
-        }
-    }
 
     /**
      * Prepares the web crawler scaffolding inside the cloned repository workspace.

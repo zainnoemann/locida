@@ -32,7 +32,6 @@ class TestTable
                 'repo_url',
                 'source_branch',
                 'test_branch',
-                'app_url',
                 'status',
                 'error',
                 'started_at',
@@ -69,12 +68,7 @@ class TestTable
                     ->color('info')
                     ->sortable()
                     ->searchable(),
-                TextColumn::make('app_url')
-                    ->label('App URL')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                    ->copyable()
-                    ->limit(50)
-                    ->tooltip(fn (?string $state): ?string => $state),
+
                 TextColumn::make('status')
                     ->label('Result Status')
                     ->badge()

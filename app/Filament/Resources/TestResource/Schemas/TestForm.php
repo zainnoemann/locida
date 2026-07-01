@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\TestResource\Schemas;
 
 use App\Models\Test;
-use App\Services\GiteaService;
+use App\Contracts\GitInterface;
 use Closure;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -19,8 +19,8 @@ class TestForm
             ->components([
                 Select::make('repo_url')
                     ->label('Source Repository')
-                    ->options(function (callable $get, GiteaService $gitea) {
-                        $repos = collect($gitea->getRepositories())
+                    ->options(function (callable $get, GitInterface $git) {
+                        $repos = collect($git->getRepositories())
                             ->filter(fn ($repo) => is_array($repo) && isset($repo['clone_url'], $repo['full_name']))
                             ->mapWithKeys(fn ($repo) => [$repo['clone_url'] => $repo['full_name']]);
 
@@ -33,13 +33,13 @@ class TestForm
 
                         return $repos->all();
                     })
-                    ->helperText('Select a source repository from Gitea to generate Playwright tests.')
+                    ->helperText('Select a source repository from your Git to generate Playwright tests.')
                     ->searchable()
                     ->preload()
                     ->required()
                     ->live()
-                    ->afterStateUpdated(function ($state, callable $set, GiteaService $gitea) {
-                        $repo = collect($gitea->getRepositories())
+                    ->afterStateUpdated(function ($state, callable $set, GitInterface $git) {
+                        $repo = collect($git->getRepositories())
                             ->first(fn ($item) => is_array($item) && ($item['clone_url'] ?? null) === $state);
 
                         if (! is_array($repo)) {
@@ -86,13 +86,13 @@ class TestForm
                     ->maxLength(255),
                 Select::make('source_branch')
                     ->label('Source Branch')
-                    ->options(function (callable $get, GiteaService $gitea): array {
+                    ->options(function (callable $get, GitInterface $git): array {
                         $repoUrl = (string) ($get('repo_url') ?? '');
                         if ($repoUrl === '') {
                             return [];
                         }
 
-                        $branches = collect($gitea->getBranchesByCloneUrl($repoUrl))
+                        $branches = collect($git->getBranchesByCloneUrl($repoUrl))
                             ->filter(fn ($branch) => is_string($branch) && $branch !== '')
                             ->values();
 
@@ -117,8 +117,8 @@ class TestForm
                     ->label('Test Branch')
                     ->placeholder('Enter test branch name')
                     ->required()
-                    ->rule(function (callable $get, GiteaService $gitea, ?Test $record): Closure {
-                        return function (string $attribute, mixed $value, Closure $fail) use ($get, $gitea, $record): void {
+                    ->rule(function (callable $get, GitInterface $git, ?Test $record): Closure {
+                        return function (string $attribute, mixed $value, Closure $fail) use ($get, $git, $record): void {
                             $branchName = trim((string) $value);
                             if ($branchName === '') {
                                 return;
@@ -137,91 +137,14 @@ class TestForm
                                 return;
                             }
 
-                            $existingBranches = $gitea->getBranchesByCloneUrl($repoUrl, false);
+                            $existingBranches = $git->getBranchesByCloneUrl($repoUrl, false);
                             if (in_array($branchName, $existingBranches, true)) {
                                 $fail('Test branch already exists in the repository. Please use a different branch name.');
                             }
                         };
                     })
                     ->maxLength(255),
-                TextInput::make('app_url')
-                    ->label('App URL')
-                    ->placeholder('Enter App URL')
-                    ->url()
-                    ->required()
-                    ->rule(function (): Closure {
-                        return function (string $attribute, mixed $value, Closure $fail): void {
-                            $candidate = trim((string) $value);
-                            if ($candidate === '') {
-                                return;
-                            }
 
-                            if (! str_starts_with($candidate, 'http://') && ! str_starts_with($candidate, 'https://')) {
-                                $candidate = 'http://' . ltrim($candidate, '/');
-                            }
-
-                            $parsed = parse_url($candidate);
-                            if ($parsed !== false && ! empty($parsed['host'])) {
-                                $host = (string) $parsed['host'];
-                                if (in_array($host, ['localhost', '127.0.0.1', '0.0.0.0'], true)) {
-                                    $host = 'host.docker.internal';
-                                }
-
-                                $scheme = $parsed['scheme'] ?? 'http';
-                                $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
-                                $path = $parsed['path'] ?? '';
-                                $query = isset($parsed['query']) ? '?' . $parsed['query'] : '';
-                                $fragment = isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '';
-
-                                $candidate = rtrim($scheme . '://' . $host . $port . $path . $query . $fragment, '/');
-                            }
-
-                            if (! filter_var($candidate, FILTER_VALIDATE_URL)) {
-                                $fail('App URL is invalid.');
-
-                                return;
-                            }
-
-                            try {
-                                $headResponse = Http::timeout(10)
-                                    ->retry(1, 200)
-                                    ->withOptions(['allow_redirects' => true])
-                                    ->head($candidate);
-
-                                if ($headResponse->successful()) {
-                                    return;
-                                }
-
-                                if (in_array($headResponse->status(), [405, 501], true)) {
-                                    $getResponse = Http::timeout(10)
-                                        ->retry(1, 200)
-                                        ->withOptions(['allow_redirects' => true])
-                                        ->get($candidate);
-
-                                    if ($getResponse->successful()) {
-                                        return;
-                                    }
-
-                                    $fail("App URL is unreachable (HTTP {$getResponse->status()}).");
-
-                                    return;
-                                }
-
-                                $fail("App URL is unreachable (HTTP {$headResponse->status()}).");
-                            } catch (Throwable $exception) {
-                                $message = strtolower($exception->getMessage());
-
-                                if (str_contains($message, 'curl error 28') || str_contains($message, 'timed out')) {
-                                    $fail('App URL timed out.');
-
-                                    return;
-                                }
-
-                                $fail('App URL is unreachable.');
-                            }
-                        };
-                    })
-                    ->maxLength(2048),
                 TextInput::make('test_email')
                     ->label('Test Account Email')
                     ->placeholder('Enter test account email')

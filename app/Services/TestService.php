@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\GitInterface;
 use App\Jobs\PollTestJob;
 use App\Models\Test;
 use Illuminate\Support\Facades\File;
@@ -26,7 +27,7 @@ class TestService
     private const DEFAULT_TEST_BRANCH = 'playwright';
 
     public function __construct(
-        private GiteaService $gitea,
+        private GitInterface $git,
         private WebCrawlerService $crawler,
         private ScriptGeneratorService $generator,
         private TestRunnerService $runner
@@ -142,7 +143,7 @@ class TestService
      */
     public function markTestCompleted(Test $test, string $logFile): void
     {
-        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Playwright report available on Gitea Actions.\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Playwright report available on Git Actions.\n");
         $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Done.\n");
 
         $test->update([
@@ -154,7 +155,7 @@ class TestService
     }
 
     /**
-     * Delegates the polling of Playwright action workflows in Gitea to the runner service.
+     * Delegates the polling of Playwright action workflows in the Git to the runner service.
      *
      * @param string $logFile
      * @param string $repoFullName
@@ -207,22 +208,11 @@ class TestService
             }
 
             $cloneUrl = $test->repo_url;
-            $giteaToken = $this->gitea->getToken();
+            $gitToken = $this->git->getToken();
             [$gitIdentityName, $gitIdentityEmail] = $this->resolveGitIdentity($test->repo_name);
             $sourceBranch = $this->resolveSourceBranch($test);
             $testBranch = $this->resolveTestBranch($test);
-            $targetUrl = $this->crawler->resolveTargetUrl($test->app_url);
 
-            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Validating App URL accessibility: {$targetUrl}\n");
-            $targetUrlValidationError = $this->crawler->validateTargetUrl($targetUrl);
-            if ($targetUrlValidationError !== null) {
-                if ($this->isGenerationCancelled($test)) {
-                    return;
-                }
-                $this->markTestFailed($test, $logFile, $targetUrlValidationError, 'App URL Validation Error');
-                return;
-            }
-            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] App URL validation passed.\n");
 
             if ($this->isGenerationCancelled($test)) {
                 return;
@@ -230,7 +220,7 @@ class TestService
 
             // Substitute localhost references for Docker network compatibility
             $cloneUrl = str_replace(['localhost:3000', '127.0.0.1:3000'], 'gitea:3000', $cloneUrl);
-            $gitUrl = $this->buildAuthenticatedGitUrl($cloneUrl, $giteaToken, $test->repo_name);
+            $gitUrl = $this->buildAuthenticatedGitUrl($cloneUrl, $gitToken, $test->repo_name);
 
             // Pass log append callback
             $logger = function ($msg) use ($logFile) {
@@ -249,7 +239,7 @@ class TestService
             }
 
             $this->prepareOutputRepository($paths['clone'], $paths['output']);
-            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Staging Playwright crawler, generator, and workflows for Gitea Actions...\n");
+            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Staging Playwright crawler, generator, and workflows...\n");
 
             $this->crawler->prepareCrawler($paths['output']);
             $this->generator->prepareGenerator($paths['output']);
@@ -269,7 +259,7 @@ class TestService
 
             $headSha = $this->resolveHeadSha($paths['output']);
 
-            $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Dispatching polling job to monitor Gitea Actions...\n");
+            $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Dispatching polling job to monitor Actions...\n");
 
             $deadline = time() + self::ACTIONS_MAX_WAIT_SECONDS;
             PollTestJob::dispatch(
@@ -323,7 +313,7 @@ class TestService
      */
     public function resolveGitIdentity(?string $fullName): array
     {
-        $username = 'gitea';
+        $username = 'locida-bot';
 
         if (! empty($fullName) && str_contains($fullName, '/')) {
             [$owner] = explode('/', $fullName, 2);
@@ -334,10 +324,10 @@ class TestService
 
         $emailLocalPart = preg_replace('/[^a-zA-Z0-9._-]/', '', $username);
         if (empty($emailLocalPart)) {
-            $emailLocalPart = 'gitea';
+            $emailLocalPart = 'locida-bot';
         }
 
-        return [$username, $emailLocalPart . '@users.noreply.gitea.local'];
+        return [$username, $emailLocalPart . '@users.noreply.git.local'];
     }
 
     /**
@@ -359,7 +349,7 @@ class TestService
             return $url;
         }
 
-        // For Gitea over HTTP(S), use repo owner username + personal access token.
+        // Use repo owner username + personal access token.
         [$username] = $this->resolveGitIdentity($fullName);
 
         $auth = rawurlencode($username) . ':' . rawurlencode($token) . '@';
@@ -544,7 +534,7 @@ class TestService
      */
     public function pushPlaywrightBranch(Test $test, string $logFile, string $outputDir, string $gitUrl, string $gitIdentityName, string $gitIdentityEmail, string $testBranch): bool
     {
-        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing Playwright crawler, generator, and workflows to Gitea branch {$testBranch}...\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing Playwright crawler, generator, and workflows to branch {$testBranch}...\n");
 
         $gitCommands = [
             'git config --global --add safe.directory ' . escapeshellarg($outputDir),
@@ -552,8 +542,9 @@ class TestService
             'git config user.name ' . escapeshellarg($gitIdentityName),
             'git config user.email ' . escapeshellarg($gitIdentityEmail),
             'git add .',
-            'git commit --allow-empty -m "test(playwright): automate crawler and generated test execution"',
+            'git commit --allow-empty -m "chore(playwright): setup automation for crawler and test generator"',
             '(git remote remove origin 2>/dev/null || true)',
+            "git credential reject <<EOF\nprotocol=https\nhost=github.com\nEOF",
             "git credential reject <<EOF\nprotocol=http\nhost=gitea\nEOF",
             'git remote add origin ' . escapeshellarg($gitUrl) . ' || git remote set-url origin ' . escapeshellarg($gitUrl),
             'git push -u origin ' . escapeshellarg($testBranch) . ' --force',

@@ -3,7 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Test;
-use App\Services\GiteaService;
+use App\Contracts\GitInterface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\URL;
@@ -247,7 +247,7 @@ class TestReport extends Component
      */
     private function fetchRepositoryFileContent(string $owner, string $repo, string $path, string $testBranch): ?string
     {
-        $payload = app(GiteaService::class)->getRepositoryContent($owner, $repo, $path, $testBranch);
+        $payload = app(GitInterface::class)->getRepositoryContent($owner, $repo, $path, $testBranch);
 
         if ($payload === null) {
             return null;
@@ -286,9 +286,7 @@ class TestReport extends Component
         }
 
         $directory = $this->storedHtmlReportBaseDirectory($test->id);
-        if (! File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
-        }
+        File::ensureDirectoryExists($directory);
         File::put($this->storedHtmlReportFilePath($test->id), $html);
 
         // Fetch dependent assets like ZIP traces and JSON data chunks required by Playwright UI.
@@ -325,7 +323,7 @@ class TestReport extends Component
         string $remoteDirectoryPath,
         string $localDirectoryPath
     ): void {
-        $entries = app(GiteaService::class)->getRepositoryContent($owner, $repo, $remoteDirectoryPath, $testBranch);
+        $entries = app(GitInterface::class)->getRepositoryContent($owner, $repo, $remoteDirectoryPath, $testBranch);
 
         if ($entries === null) {
             return;
@@ -334,9 +332,7 @@ class TestReport extends Component
             return;
         }
 
-        if (! File::exists($localDirectoryPath)) {
-            File::makeDirectory($localDirectoryPath, 0755, true);
-        }
+        File::ensureDirectoryExists($localDirectoryPath);
 
         foreach ($entries as $entry) {
             if (! is_array($entry)) {
@@ -370,7 +366,9 @@ class TestReport extends Component
                 continue;
             }
 
-            File::put($localDirectoryPath . '/' . $entryName, $content);
+            $targetPath = $localDirectoryPath . '/' . $entryName;
+            File::ensureDirectoryExists(dirname($targetPath));
+            File::put($targetPath, $content);
         }
     }
 

@@ -26,7 +26,6 @@ class Test extends Model
         'repo_url',
         'source_branch',
         'test_branch',
-        'app_url',
         'test_email',
         'test_password',
         'status',
