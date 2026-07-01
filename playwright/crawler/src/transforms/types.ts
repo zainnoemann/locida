@@ -9,6 +9,7 @@ export interface FormInput {
   tag: string;
   placeholder: string | null;
   required: boolean;
+  options?: { value: string; text: string }[];
 }
 
 export interface FormData {
@@ -50,8 +51,8 @@ export interface CrawlerConfig {
     password: string;
   };
   headless: boolean;
+  loginPath: string;
   guestSeedPaths: string[];
-  protectedSeedPaths: string[];
   guestExcludePatterns: string[];
   authExcludePatterns: string[];
 }

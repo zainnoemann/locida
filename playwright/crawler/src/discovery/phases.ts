@@ -43,7 +43,8 @@ export async function runGuestPhase(config: CrawlerConfig): Promise<void> {
         page,
         request,
         requestedPathname,
-        'guest'
+        'guest',
+        config
       );
       await Dataset.pushData(dataset);
 
@@ -63,18 +64,10 @@ export async function runAuthPhase(config: CrawlerConfig): Promise<void> {
   const authQueue = await RequestQueue.open(createQueueName('auth-queue'));
 
   await authQueue.addRequest({
-    url: toAbsoluteUrl('/login', config),
-    uniqueKey: 'auth:/login',
+    url: toAbsoluteUrl(config.loginPath, config),
+    uniqueKey: `auth:${normalizePathname(config.loginPath)}`,
     userData: { loginStep: true },
   });
-
-  for (const pathItem of config.protectedSeedPaths) {
-    await authQueue.addRequest({
-      url: toAbsoluteUrl(pathItem, config),
-      uniqueKey: `auth:${normalizePathname(pathItem)}`,
-      userData: { requiresAuth: true },
-    });
-  }
 
   const crawler = new PlaywrightCrawler({
     requestQueue: authQueue,
@@ -91,13 +84,22 @@ export async function runAuthPhase(config: CrawlerConfig): Promise<void> {
           session.userData.authenticated = await authenticate(page, config, log);
           if (session.userData.authenticated) {
             log.info('Authentication successful. Proceeding with auth routes.');
+            
+            const postLoginUrl = page.url();
+            const urlObj = new URL(postLoginUrl);
+            await authQueue.addRequest({
+              url: postLoginUrl,
+              uniqueKey: `auth:${normalizePathname(urlObj.pathname)}`,
+              userData: { requiresAuth: true },
+            });
+            
           } else {
             log.error('Authentication failed. Dependent auth routes will likely be skipped.');
           }
         }
       },
     ],
-    async requestHandler({ page, request, log }) {
+    async requestHandler({ page, request, enqueueLinks, log }) {
       const requestedPathname = normalizePathname(
         new URL(request.url).pathname
       );
@@ -107,10 +109,10 @@ export async function runAuthPhase(config: CrawlerConfig): Promise<void> {
 
       if (
         request.userData?.requiresAuth &&
-        effectivePathname === '/login'
+        effectivePathname === config.loginPath
       ) {
         log.warning(
-          `Skipping ${requestedPathname}: still redirected to /login`
+          `Skipping ${requestedPathname}: still redirected to ${config.loginPath}`
         );
         return;
       }
@@ -126,9 +128,15 @@ export async function runAuthPhase(config: CrawlerConfig): Promise<void> {
         page,
         request,
         requestedPathname,
-        'auth'
+        'auth',
+        config
       );
       await Dataset.pushData(dataset);
+
+      await enqueueLinks({
+        strategy: 'same-domain',
+        exclude: config.authExcludePatterns,
+      });
     },
   });
 

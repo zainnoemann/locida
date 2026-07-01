@@ -1,18 +1,22 @@
 import type { Page } from 'playwright';
 import type { Request } from 'crawlee';
-import { ExtractedPageData } from './types.js';
+import { CrawlerConfig, ExtractedPageData } from './types.js';
 import { normalizePathname } from '../shared/utils.js';
 
 export async function extractPageData(
   page: Page,
   request: Request,
   requestedPathname: string,
-  phase: 'guest' | 'auth'
+  phase: 'guest' | 'auth',
+  config: CrawlerConfig
 ): Promise<ExtractedPageData> {
   const effectivePathname = normalizePathname(new URL(page.url()).pathname);
   const pageTitle = await page.title();
+  
+  // Pass exclude patterns to browser context
+  const excludePatterns = config.authExcludePatterns.map(p => p.replace(/\*\*/g, '').replace(/\*/g, ''));
 
-  const pageData = await page.evaluate(() => {
+  const pageData = await page.evaluate((excludes) => {
     const normalizePath = (value: string): string | null => {
       if (!value) return null;
       const result = value
@@ -62,7 +66,9 @@ export async function extractPageData(
     const forms = Array.from(document.querySelectorAll('form'))
       .map((form) => {
         if (!(form instanceof HTMLFormElement)) return null;
-        if ((form.action || '').includes('logout')) return null;
+        
+        const rawAction = form.action || '';
+        if (excludes.some(ex => rawAction.includes(ex))) return null;
 
         const action = normalizePath(
           new URL(form.action || window.location.href, window.location.href)
@@ -78,7 +84,7 @@ export async function extractPageData(
           const tag = input.tagName.toLowerCase();
           const type = (input as HTMLInputElement).getAttribute('type') || tag;
 
-          return {
+          const baseInput = {
             name: input.getAttribute('name') || null,
             label: toLabel(input as HTMLElement),
             type,
@@ -87,6 +93,18 @@ export async function extractPageData(
               (input as HTMLInputElement).getAttribute('placeholder') || null,
             required: input.hasAttribute('required'),
           };
+
+          if (tag === 'select') {
+            const options = Array.from(input.querySelectorAll('option'))
+              .map((opt) => ({
+                value: opt.getAttribute('value') || '',
+                text: opt.textContent?.trim() || '',
+              }))
+              .filter((opt) => opt.value !== '');
+            return { ...baseInput, options };
+          }
+
+          return baseInput;
         });
 
         return { action, method, inputs };
@@ -134,7 +152,7 @@ export async function extractPageData(
       .filter(Boolean);
 
     return { forms, tables, actions };
-  });
+  }, excludePatterns);
 
   const forms = (
     pageData.forms as Array<ExtractedPageData['forms'][number] | null>
