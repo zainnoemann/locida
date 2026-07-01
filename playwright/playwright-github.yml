@@ -1,0 +1,122 @@
+name: Playwright Automation Pipeline
+
+on:
+    workflow_dispatch:
+    push:
+        branches: ['**']
+    pull_request:
+        branches: ['**']
+
+jobs:
+    playwright:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        container:
+            image: mcr.microsoft.com/playwright:v1.58.2-jammy
+            options: >-
+                --add-host host.docker.internal:host-gateway
+                --mount type=volume,source=playwright-npm-cache,target=/root/.npm
+
+        env:
+            APP_URL: http://127.0.0.1:8000
+            CRAWLER_DIR: playwright/crawler
+            GENERATOR_DIR: playwright/generator
+            PLAYWRIGHT_TESTS_DIR: playwright/generator/tests
+            TEST_EMAIL: playwright@example.com
+            TEST_PASSWORD: playwright
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install Laravel dependencies
+              run: |
+                  apt-get update
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common curl unzip
+                  add-apt-repository -y ppa:ondrej/php
+                  apt-get update
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y php8.3-cli php8.3-sqlite3 php8.3-xml php8.3-mbstring php8.3-curl
+                  curl -sS https://getcomposer.org/installer | php8.3 -- --install-dir=/usr/local/bin --filename=composer
+
+            - name: Start Laravel application
+              run: |
+                  git config --global --add safe.directory '*'
+                  composer install --no-interaction --prefer-dist --optimize-autoloader
+                  cp .env.example .env
+                  sed -i 's/DB_CONNECTION=.*/DB_CONNECTION=sqlite/g' .env
+                  sed -i '/DB_DATABASE/d' .env
+                  npm install
+                  npm run build
+                  php8.3 artisan key:generate
+                  touch database/database.sqlite
+                  php8.3 artisan migrate --force
+                  php8.3 artisan tinker --execute="\App\Models\User::factory()->create(['email' => '${TEST_EMAIL}', 'password' => bcrypt('${TEST_PASSWORD}'), 'is_admin' => true]);"
+                  php8.3 artisan serve --host=127.0.0.1 --port=8000 &
+                  npx wait-on http://127.0.0.1:8000
+
+            - name: Install crawler dependencies
+              run: |
+                  cd "$CRAWLER_DIR"
+                  npm install --prefer-offline --no-audit --no-fund
+
+            - name: Build crawler
+              run: |
+                  cd "$CRAWLER_DIR"
+                  npm run build
+
+            - name: Run Playwright Crawler
+              env:
+                  HEADLESS: 'true'
+              run: |
+                  cd "$CRAWLER_DIR"
+                  npm run start
+
+            - name: Install generator dependencies
+              run: |
+                  cd "$GENERATOR_DIR"
+                  npm install --prefer-offline --no-audit --no-fund
+
+            - name: Build generator
+              run: |
+                  cd "$GENERATOR_DIR"
+                  npm run build
+
+            - name: Generate tests
+              run: |
+                  cd "$GENERATOR_DIR"
+                  node dist/index.js ../crawler/storage/datasets/default ./tests --base-url "$APP_URL" --ci-app-host 127.0.0.1:8000
+
+            - name: Install test dependencies
+              run: |
+                  cd "$PLAYWRIGHT_TESTS_DIR"
+                  npm install --prefer-offline --no-audit --no-fund
+
+            - name: Run Playwright tests
+              run: |
+                  cd "$PLAYWRIGHT_TESTS_DIR"
+                  npx playwright test
+
+            - name: Save output to branch folder
+              if: always()
+              run: |
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  DATASET_DIR="$CRAWLER_DIR/storage/datasets/default"
+
+                  if [ -d "$DATASET_DIR" ]; then
+                      git add "$DATASET_DIR"
+                  fi
+
+                  if [ -d "$PLAYWRIGHT_TESTS_DIR" ]; then
+                      rm -rf "$PLAYWRIGHT_TESTS_DIR/node_modules"
+                      git add "$PLAYWRIGHT_TESTS_DIR"
+
+                      if [ -d "$GENERATOR_DIR/reports" ]; then
+                          git add "$GENERATOR_DIR/reports"
+                      fi
+                  fi
+
+                  git config user.name "${{ github.actor }}"
+                  git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+                  git commit -m "chore(playwright): update datasets, generated tests, and reports [skip ci]" || echo "No changes to commit"
+                  git push origin "HEAD:${GITHUB_REF_NAME}"
