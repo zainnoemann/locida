@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\GitInterface;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -9,14 +10,14 @@ use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
- * Service to interact with the configured Gitea instance via its REST API.
+ * Service to interact with the configured GitHub instance via its REST API.
  * Handles authentication, data retrieval (repositories, branches, actions),
  * and implements caching strategies to avoid rate limits and improve performance.
  */
-class GiteaService implements \App\Contracts\GitInterface
+class GitHubService implements GitInterface
 {
     /**
-     * Default time-to-live for cached Gitea responses (repositories and branches).
+     * Default time-to-live for cached responses.
      */
     protected const CACHE_TTL_MINUTES = 5;
     protected string $rootUrl;
@@ -25,50 +26,31 @@ class GiteaService implements \App\Contracts\GitInterface
 
     public function __construct()
     {
-        $this->rootUrl = (string) config('services.gitea.root_url');
-        $this->apiUrl = (string) config('services.gitea.url');
-        $this->apiToken = (string) config('services.gitea.token');
+        $this->rootUrl = (string) config('services.github.root_url');
+        $this->apiUrl = (string) config('services.github.url');
+        $this->apiToken = (string) config('services.github.token');
     }
 
-    /**
-     * Returns the base Gitea root URL (without API paths).
-     *
-     * @return string
-     */
     public function getRootUrl(): string
     {
         return $this->rootUrl;
     }
 
-    /**
-     * Returns the configured personal access token used for Gitea authentication.
-     *
-     * @return string
-     */
     public function getToken(): string
     {
         return $this->apiToken;
     }
 
     /**
-     * Configures and returns a base HTTP client for Gitea API requests.
-     * Automatically attaches the authorization token and sets connection limits.
-     *
-     * @return PendingRequest
+     * Configures and returns a base HTTP client for GitHub API requests.
      */
     public function httpClient(): PendingRequest
     {
-        return Http::withToken($this->apiToken)->timeout(10)->retry(2, 200);
+        return Http::withToken($this->apiToken)
+            ->withHeaders(['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'])
+            ->timeout(10)->retry(2, 200);
     }
 
-    /**
-     * Fetches a list of action runs (CI/CD workflows) for a specific repository.
-     *
-     * @param string $owner Repository owner username or organization.
-     * @param string $repo Repository name.
-     * @param array $query Optional query parameters (e.g., branch, pagination filters).
-     * @return array Raw decoded JSON array containing 'workflow_runs' or equivalent. Returns empty array on failure.
-     */
     public function getActionRuns(string $owner, string $repo, array $query = []): array
     {
         try {
@@ -79,20 +61,12 @@ class GiteaService implements \App\Contracts\GitInterface
                 return $response->json() ?? [];
             }
         } catch (Throwable $e) {
-            Log::error('Exception while fetching Gitea action runs.', ['message' => $e->getMessage()]);
+            Log::error('Exception while fetching GitHub action runs.', ['message' => $e->getMessage()]);
         }
 
         return [];
     }
 
-    /**
-     * Fetches details of a specific action run by its ID.
-     *
-     * @param string $owner Repository owner.
-     * @param string $repo Repository name.
-     * @param int $runId The unique identifier of the action run.
-     * @return array|null The run details payload, or null if not found/error.
-     */
     public function getActionRun(string $owner, string $repo, int $runId): ?array
     {
         try {
@@ -103,20 +77,12 @@ class GiteaService implements \App\Contracts\GitInterface
                 return $response->json();
             }
         } catch (Throwable $e) {
-            Log::error('Exception while fetching Gitea action run.', ['message' => $e->getMessage()]);
+            Log::error('Exception while fetching GitHub action run.', ['message' => $e->getMessage()]);
         }
 
         return null;
     }
 
-    /**
-     * Fetches the individual jobs (steps/tasks) associated with a specific action run.
-     *
-     * @param string $owner Repository owner.
-     * @param string $repo Repository name.
-     * @param int $runId The action run ID.
-     * @return array Decoded JSON array of job payloads.
-     */
     public function getRunJobs(string $owner, string $repo, int $runId): array
     {
         try {
@@ -127,25 +93,15 @@ class GiteaService implements \App\Contracts\GitInterface
                 return $response->json() ?? [];
             }
         } catch (Throwable $e) {
-            Log::error('Exception while fetching Gitea run jobs.', ['message' => $e->getMessage()]);
+            Log::error('Exception while fetching GitHub run jobs.', ['message' => $e->getMessage()]);
         }
 
         return [];
     }
 
-    /**
-     * Fetches the raw text output logs for a specific job.
-     * Note: Gitea may sometimes return logs as a compressed ZIP binary stream.
-     *
-     * @param string $owner Repository owner.
-     * @param string $repo Repository name.
-     * @param int $jobId The unique identifier of the job.
-     * @return string|null The raw log content (text or binary zip), or null on failure.
-     */
     public function getJobLog(string $owner, string $repo, int $jobId): ?string
     {
         try {
-            // Extended timeout for potentially large log downloads
             $response = $this->httpClient()
                 ->timeout(20)
                 ->get(rtrim($this->apiUrl, '/') . "/repos/{$owner}/{$repo}/actions/jobs/{$jobId}/logs");
@@ -154,21 +110,12 @@ class GiteaService implements \App\Contracts\GitInterface
                 return $response->body();
             }
         } catch (Throwable $e) {
-            Log::error('Exception while fetching Gitea job log.', ['message' => $e->getMessage()]);
+            Log::error('Exception while fetching GitHub job log.', ['message' => $e->getMessage()]);
         }
 
         return null;
     }
 
-    /**
-     * Fetches the file or directory metadata from the repository tree.
-     *
-     * @param string $owner Repository owner.
-     * @param string $repo Repository name.
-     * @param string $path Path inside the repository.
-     * @param string $ref The branch name or commit SHA to inspect.
-     * @return array|null The decoded content metadata or null on failure.
-     */
     public function getRepositoryContent(string $owner, string $repo, string $path, string $ref): ?array
     {
         try {
@@ -181,85 +128,50 @@ class GiteaService implements \App\Contracts\GitInterface
                 return $response->json();
             }
         } catch (Throwable $e) {
-            Log::error('Exception while fetching Gitea repository content.', ['message' => $e->getMessage()]);
+            Log::error('Exception while fetching GitHub repository content.', ['message' => $e->getMessage()]);
         }
 
         return null;
     }
 
-    /**
-     * Retrieves the version of the configured Gitea instance.
-     * Results are cached for 1 hour to minimize unnecessary API calls.
-     *
-     * @return string|null The Gitea semantic version string.
-     */
     public function getVersion(): ?string
     {
-        if (empty($this->rootUrl)) {
-            return null;
+        // GitHub API doesn't expose a simple version endpoint like Gitea does.
+        // We'll return "cloud" or similar depending on the URL.
+        if (str_contains($this->apiUrl, 'api.github.com')) {
+            return 'Cloud';
         }
-
-        return Cache::remember('gitea.version', now()->addHours(1), function (): ?string {
-            try {
-                $response = Http::timeout(10)
-                    ->retry(2, 200)
-                    ->get(rtrim($this->rootUrl, '/') . '/api/v1/version');
-
-                if (! $response->successful()) {
-                    return null;
-                }
-
-                $version = $response->json('version');
-
-                return is_string($version) && $version !== '' ? $version : null;
-            } catch (Throwable $e) {
-                Log::warning('Exception while fetching Gitea version.', ['message' => $e->getMessage()]);
-
-                return null;
-            }
-        });
+        return 'Enterprise';
     }
 
-    /**
-     * Fetches a list of repositories accessible to the authenticated user.
-     * Results are cached briefly to speed up UI dropdown rendering.
-     *
-     * @return array Decoded JSON array of repository data payloads.
-     */
     public function getRepositories(): array
     {
         if (empty($this->apiUrl) || empty($this->apiToken)) {
-            Log::warning('Gitea API URL or Token is missing.');
+            Log::warning('GitHub API URL or Token is missing.');
             return [];
         }
 
-        $cacheKey = 'gitea.repositories';
+        $cacheKey = 'github.repositories';
 
         return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function (): array {
             try {
+                // Fetch user's repos. Note: pagination is usually required for GitHub if many repos.
                 $response = $this->httpClient()
-                    ->get(rtrim($this->apiUrl, '/') . '/user/repos');
+                    ->get(rtrim($this->apiUrl, '/') . '/user/repos', ['per_page' => 100]);
 
                 if ($response->successful()) {
                     return $response->json();
                 }
 
-                Log::error('Failed to fetch Gitea repositories.', ['status' => $response->status(), 'response' => $response->body()]);
+                Log::error('Failed to fetch GitHub repositories.', ['status' => $response->status(), 'response' => $response->body()]);
             } catch (Throwable $e) {
-                Log::error('Exception while fetching Gitea repositories.', ['message' => $e->getMessage()]);
+                Log::error('Exception while fetching GitHub repositories.', ['message' => $e->getMessage()]);
             }
 
             return [];
         });
     }
 
-    /**
-     * Resolves repository owner and name from a given clone URL, then fetches its branches.
-     *
-     * @param string $cloneUrl The HTTP clone URL of the repository.
-     * @param bool $useCache Whether to leverage the cache.
-     * @return array<int, string> A flat list of branch names.
-     */
     public function getBranchesByCloneUrl(string $cloneUrl, bool $useCache = true): array
     {
         $repo = collect($this->getRepositories())
@@ -279,14 +191,6 @@ class GiteaService implements \App\Contracts\GitInterface
         return $this->getBranches($owner, $name, $useCache);
     }
 
-    /**
-     * Public proxy to fetch repository branches, optionally using cache.
-     *
-     * @param string $owner
-     * @param string $repo
-     * @param bool $useCache
-     * @return array<int, string>
-     */
     public function getBranches(string $owner, string $repo, bool $useCache = true): array
     {
         if (empty($this->apiUrl) || empty($this->apiToken)) {
@@ -297,28 +201,21 @@ class GiteaService implements \App\Contracts\GitInterface
             return $this->fetchBranches($owner, $repo);
         }
 
-        $cacheKey = sprintf('gitea.branches.%s.%s', $owner, $repo);
+        $cacheKey = sprintf('github.branches.%s.%s', $owner, $repo);
 
         return Cache::remember($cacheKey, now()->addMinutes(self::CACHE_TTL_MINUTES), function () use ($owner, $repo): array {
             return $this->fetchBranches($owner, $repo);
         });
     }
 
-    /**
-     * Executes the API request to fetch repository branches and extracts their names.
-     *
-     * @param string $owner
-     * @param string $repo
-     * @return array<int, string>
-     */
     protected function fetchBranches(string $owner, string $repo): array
     {
         try {
             $response = $this->httpClient()
-                ->get(rtrim($this->apiUrl, '/') . "/repos/{$owner}/{$repo}/branches");
+                ->get(rtrim($this->apiUrl, '/') . "/repos/{$owner}/{$repo}/branches", ['per_page' => 100]);
 
             if (! $response->successful()) {
-                Log::error('Failed to fetch Gitea branches.', [
+                Log::error('Failed to fetch GitHub branches.', [
                     'owner' => $owner,
                     'repo' => $repo,
                     'status' => $response->status(),
@@ -338,7 +235,7 @@ class GiteaService implements \App\Contracts\GitInterface
                 $branches
             )));
         } catch (Throwable $e) {
-            Log::error('Exception while fetching Gitea branches.', [
+            Log::error('Exception while fetching GitHub branches.', [
                 'owner' => $owner,
                 'repo' => $repo,
                 'message' => $e->getMessage(),
@@ -358,7 +255,7 @@ class GiteaService implements \App\Contracts\GitInterface
                 return $response->json();
             }
         } catch (Throwable $e) {
-            Log::error('Exception while fetching Gitea user.', ['message' => $e->getMessage()]);
+            Log::error('Exception while fetching GitHub user.', ['message' => $e->getMessage()]);
         }
 
         return null;
@@ -378,12 +275,13 @@ class GiteaService implements \App\Contracts\GitInterface
                 return $response->json();
             }
 
-            // If conflict (repo exists), we can also return an array indicating it exists
-            if ($response->status() === 409) {
-                return ['error' => 'Conflict', 'status' => 409, 'message' => "Repository {$name} already exists."];
-            }
+            return ['error' => 'Conflict', 'status' => $response->status(), 'message' => $response->body()];
         } catch (Throwable $e) {
-            Log::error('Exception while creating Gitea repository.', ['message' => $e->getMessage()]);
+            if (str_contains($e->getMessage(), 'status code 422') || str_contains($e->getMessage(), 'status code 409')) {
+                return ['error' => 'Conflict', 'status' => 422, 'message' => 'Repository already exists.'];
+            }
+            Log::error('Exception while creating GitHub repository.', ['message' => $e->getMessage()]);
+            return ['error' => 'Exception', 'message' => $e->getMessage()];
         }
 
         return null;
