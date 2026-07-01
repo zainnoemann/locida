@@ -1,5 +1,5 @@
 import { escapeSingle, toFieldProp, capitalize, toWords } from '../shared/strings.js';
-import { ResourceInfo } from '../types.js';
+import { FormInput, ResourceInfo } from '../shared/types.js';
 
 export function generateBasePage(): string {
     return `// pages/BasePage.ts
@@ -35,90 +35,102 @@ export class BasePage {
 `;
 }
 
-export function generateLoginPage(): string {
+export function generateLoginPage(fields: FormInput[] = []): string {
+    const fieldDeclarations = fields.map(f => `    readonly ${toFieldProp(f.name || '')}: Locator;`).join('\n');
+    const fieldInit = fields.map(f => `        this.${toFieldProp(f.name || '')} = page.locator('[name="${escapeSingle(f.name || '')}"]').first();`).join('\n');
+    const fillMethods = fields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        if ((f.type || '').toLowerCase() === 'checkbox') {
+            return `    async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> {\n        if (value === 'true') await this.${prop}.check();\n        else await this.${prop}.uncheck();\n    }`;
+        }
+        return `    async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> { await this.${prop}.fill(value); }`;
+    }).join('\n');
+    
     return `// pages/LoginPage.ts
 
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { ROUTES } from '../fixtures/test-data';
 
 export class LoginPage extends BasePage {
-    readonly emailInput: Locator;
-    readonly passwordInput: Locator;
-    readonly rememberMeCheckbox: Locator;
+${fieldDeclarations}
     readonly submitButton: Locator;
     readonly forgotPasswordLink: Locator;
     readonly registerLink: Locator;
 
     constructor(page: Page) {
         super(page);
-        const form = page.locator('form').first();
-        this.emailInput = form.locator('input[name="email"]');
-        this.passwordInput = form.locator('input[name="password"]');
-        this.rememberMeCheckbox = form.locator('input[name="remember"]');
-        this.submitButton = form.locator('button[type="submit"], input[type="submit"]').first();
+${fieldInit}
+        this.submitButton = page.locator('button[type="submit"], input[type="submit"]').first();
         this.forgotPasswordLink = page.locator('a[href*="forgot-password"], a[href*="reset-password"]').first();
-        this.registerLink = page.locator('a[href*="/register"]').first();
+        this.registerLink = page.locator(\`a[href*="\${ROUTES.register}"]\`).first();
     }
 
-    async goto(): Promise<void> { await this.navigate('/login'); }
+    async goto(): Promise<void> { await this.navigate(ROUTES.login); }
 
-    async login(email: string, password: string): Promise<void> {
-        await this.emailInput.fill(email);
-        await this.passwordInput.fill(password);
+    async login(data: Record<string, string>): Promise<void> {
+${fields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        return `        if (data['${escapeSingle(f.name || '')}'] !== undefined) await this.fill${capitalize(prop.replace(/Input$/, ''))}(data['${escapeSingle(f.name || '')}']);`;
+    }).join('\n')}
         await this.submitButton.click();
     }
 
-    async fillEmail(value: string): Promise<void> { await this.emailInput.fill(value); }
-    async fillPassword(value: string): Promise<void> { await this.passwordInput.fill(value); }
+${fillMethods}
     async clickSubmit(): Promise<void> { await this.submitButton.click(); }
 
     async assertOnLoginPage(): Promise<void> {
-        await this.assertURL(/\\/login/);
+        await this.assertURL(new RegExp(ROUTES.login.replace(/\\//g, '\\\\/')));
         await expect(this.submitButton).toBeVisible();
     }
 }
 `;
 }
 
-export function generateRegisterPage(): string {
+export function generateRegisterPage(fields: FormInput[] = []): string {
+    const fieldDeclarations = fields.map(f => `    readonly ${toFieldProp(f.name || '')}: Locator;`).join('\n');
+    const fieldInit = fields.map(f => `        this.${toFieldProp(f.name || '')} = page.locator('[name="${escapeSingle(f.name || '')}"]').first();`).join('\n');
+    const fillMethods = fields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        if ((f.type || '').toLowerCase() === 'checkbox') {
+            return `    async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> {\n        if (value === 'true') await this.${prop}.check();\n        else await this.${prop}.uncheck();\n    }`;
+        }
+        return `    async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> { await this.${prop}.fill(value); }`;
+    }).join('\n');
+
     return `// pages/RegisterPage.ts
 
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { ROUTES } from '../fixtures/test-data';
 
 export class RegisterPage extends BasePage {
-    readonly nameInput: Locator;
-    readonly emailInput: Locator;
-    readonly passwordInput: Locator;
-    readonly confirmPasswordInput: Locator;
+${fieldDeclarations}
     readonly submitButton: Locator;
     readonly loginLink: Locator;
 
     constructor(page: Page) {
         super(page);
-        const form = page.locator('form').first();
-        this.nameInput = form.locator('input[name="name"]');
-        this.emailInput = form.locator('input[name="email"]');
-        this.passwordInput = form.locator('input[name="password"]');
-        this.confirmPasswordInput = form.locator('input[name="password_confirmation"]');
-        this.submitButton = form.locator('button[type="submit"], input[type="submit"]').first();
-        this.loginLink = page.locator('a[href*="/login"]').first();
+${fieldInit}
+        this.submitButton = page.locator('button[type="submit"], input[type="submit"]').first();
+        this.loginLink = page.locator(\`a[href*="\${ROUTES.login}"]\`).first();
     }
 
-    async goto(): Promise<void> { await this.navigate('/register'); }
+    async goto(): Promise<void> { await this.navigate(ROUTES.register); }
 
-    async register(name: string, email: string, password: string, confirmPassword = password): Promise<void> {
-        await this.nameInput.fill(name);
-        await this.emailInput.fill(email);
-        await this.passwordInput.fill(password);
-        await this.confirmPasswordInput.fill(confirmPassword);
+    async register(data: Record<string, string>): Promise<void> {
+${fields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        return `        if (data['${escapeSingle(f.name || '')}'] !== undefined) await this.fill${capitalize(prop.replace(/Input$/, ''))}(data['${escapeSingle(f.name || '')}']);`;
+    }).join('\n')}
         await this.submitButton.click();
     }
 
+${fillMethods}
     async clickSubmit(): Promise<void> { await this.submitButton.click(); }
 
     async assertOnRegisterPage(): Promise<void> {
-        await this.assertURL(/\\/register/);
+        await this.assertURL(new RegExp(ROUTES.register.replace(/\\//g, '\\\\/')));
         await expect(this.submitButton).toBeVisible();
     }
 }
@@ -128,90 +140,72 @@ export class RegisterPage extends BasePage {
 export function generateDashboardPage(): string {
     return `// pages/DashboardPage.ts
 
-import { Page, Locator, expect } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { ROUTES } from '../fixtures/test-data';
 
 export class DashboardPage extends BasePage {
-    readonly heading: Locator;
-    readonly profileLink: Locator;
-    readonly logoutButton: Locator;
-
     constructor(page: Page) {
         super(page);
-        this.heading = page.locator('h1, h2').first();
-        this.profileLink = page.locator('a[href*="/profile"]').first();
-        this.logoutButton = page.locator('form[action*="logout"] button[type="submit"], button[data-action*="logout"], a[href*="logout"]').first();
     }
 
-    async goto(): Promise<void> { await this.navigate('/dashboard'); }
-    async assertOnDashboard(): Promise<void> { await this.assertURLContains('dashboard'); }
-    async assertWelcomeVisible(): Promise<void> { await expect(this.heading).toBeVisible(); }
-    async assertLogoutVisible(): Promise<void> { await expect(this.logoutButton).toBeVisible(); }
-    async assertProfileLinkVisible(): Promise<void> { await expect(this.profileLink).toBeVisible(); }
+    async goto(): Promise<void> {
+        await this.navigate(ROUTES.dashboard);
+    }
+
+    async assertWelcomeVisible(): Promise<void> {
+        // Assert we reached the dashboard URL and there is some heading (h1, h2, h3, h4)
+        await this.assertURL(new RegExp(ROUTES.dashboard.replace(/\\//g, '\\\\/')));
+        await expect(this.page.locator('h1, h2, h3, h4').first()).toBeVisible();
+    }
+
+    async assertOnDashboard(): Promise<void> {
+        await this.assertURL(new RegExp(ROUTES.dashboard.replace(/\\//g, '\\\\/')));
+    }
 }
 `;
 }
 
-export function generateProfilePage(): string {
+export function generateProfilePage(fields: FormInput[] = []): string {
+    const fieldDeclarations = fields.map(f => `    readonly ${toFieldProp(f.name || '')}: Locator;`).join('\n');
+    const fieldInit = fields.map(f => `        this.${toFieldProp(f.name || '')} = page.locator('[name="${escapeSingle(f.name || '')}"]').first();`).join('\n');
+    const fillMethods = fields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        if ((f.type || '').toLowerCase() === 'checkbox') {
+            return `    async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> {\n        if (value === 'true') await this.${prop}.check();\n        else await this.${prop}.uncheck();\n    }`;
+        }
+        return `    async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> { await this.${prop}.fill(value); }`;
+    }).join('\n');
+
     return `// pages/ProfilePage.ts
 
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { ROUTES } from '../fixtures/test-data';
 
 export class ProfilePage extends BasePage {
-    readonly nameInput: Locator;
-    readonly emailInput: Locator;
-    readonly saveProfileButton: Locator;
-    readonly currentPasswordInput: Locator;
-    readonly newPasswordInput: Locator;
-    readonly confirmNewPasswordInput: Locator;
-    readonly savePasswordButton: Locator;
-    readonly deleteAccountButton: Locator;
+${fieldDeclarations}
+    readonly saveButton: Locator;
 
     constructor(page: Page) {
         super(page);
-        this.nameInput = page.locator('input[name="name"]').first();
-        this.emailInput = page.locator('input[name="email"]').first();
-        this.saveProfileButton = page.locator('button[type="submit"], input[type="submit"]').first();
-        this.currentPasswordInput = page.locator('input[name="current_password"]').first();
-        this.newPasswordInput = page.locator('input[name="password"]').first();
-        this.confirmNewPasswordInput = page.locator('input[name="password_confirmation"]').first();
-        this.savePasswordButton = page.locator('button[type="submit"], input[type="submit"]').nth(1);
-        this.deleteAccountButton = page.locator('button[data-confirm], form[action*="delete"] button[type="submit"], button[type="submit"][form*="delete"]').first();
+${fieldInit}
+        this.saveButton = page.locator('button[type="submit"], input[type="submit"]').first();
     }
 
-    async goto(): Promise<void> { await this.navigate('/profile'); }
+    async goto(): Promise<void> { await this.navigate(ROUTES.profile); }
 
-    async updateName(name: string): Promise<void> {
-        await this.nameInput.clear();
-        await this.nameInput.fill(name);
-        await this.saveProfileButton.click();
+    async updateProfile(data: Record<string, string>): Promise<void> {
+${fields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        return `        if (data['${escapeSingle(f.name || '')}'] !== undefined) await this.fill${capitalize(prop.replace(/Input$/, ''))}(data['${escapeSingle(f.name || '')}']);`;
+    }).join('\n')}
+        await this.saveButton.click();
     }
 
-    async updateEmail(email: string): Promise<void> {
-        await this.emailInput.clear();
-        await this.emailInput.fill(email);
-        await this.saveProfileButton.click();
-    }
-
-    async updateProfile(name: string, email: string): Promise<void> {
-        await this.nameInput.clear();
-        await this.nameInput.fill(name);
-        await this.emailInput.clear();
-        await this.emailInput.fill(email);
-        await this.saveProfileButton.click();
-    }
-
-    async updatePassword(current: string, next: string, confirm: string): Promise<void> {
-        await this.currentPasswordInput.fill(current);
-        await this.newPasswordInput.fill(next);
-        await this.confirmNewPasswordInput.fill(confirm);
-        await this.savePasswordButton.click();
-    }
-
+${fillMethods}
     async assertOnProfilePage(): Promise<void> {
-        await this.assertURLContains('profile');
-        await expect(this.nameInput).toBeVisible();
+        await this.assertURL(new RegExp(ROUTES.profile.replace(/\\//g, '\\\\/')));
     }
 }
 `;
@@ -231,15 +225,17 @@ export function generateResourcePage(resource: ResourceInfo): string {
             const prop = toFieldProp(f.name || '');
             if ((f.type || '').toLowerCase() === 'select') {
                 return `  async fill${capitalize(prop.replace(/Input$/, ''))}(value: string): Promise<void> {
-    const options = this.${prop}.locator('option');
-    await options.first().waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
-    const count = await options.count();
-    if (count > 1) {
-      await this.${prop}.selectOption({ index: count - 1 });
-    } else if (count === 1) {
-      await this.${prop}.selectOption({ index: 0 });
-    } else {
-      await this.${prop}.selectOption(value).catch(() => {});
+    try {
+      await this.${prop}.selectOption(value, { timeout: 2000 });
+    } catch {
+      const options = this.${prop}.locator('option');
+      await options.first().waitFor({ state: 'attached', timeout: 2000 }).catch(() => {});
+      const count = await options.count();
+      if (count > 1) {
+        await this.${prop}.selectOption({ index: count - 1 }).catch(() => {});
+      } else if (count === 1) {
+        await this.${prop}.selectOption({ index: 0 }).catch(() => {});
+      }
     }
   }`;
             }

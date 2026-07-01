@@ -4,8 +4,9 @@ import { fileURLToPath } from 'url';
 import { parseArgs, printHelp } from './shared/args.js';
 import { loadDatasets } from './analyzers/load.js';
 import { analyzeDatasets } from './analyzers/analyze.js';
+import { getConfig } from './shared/config.js';
 import { generateBasePage, generateDashboardPage, generateLoginPage, generateProfilePage, generateRegisterPage, generateResourcePage } from './builders/pages.js';
-import { generateAuthSetupSpec, generateAuthSpec, generateProfileSpec, generateResourceSpec } from './builders/specs.js';
+import { generateAuthSetupSpec, generateAuthSpec, generateProfileSpec, generateResourceSpec, generateGuestAuthSpec } from './builders/specs.js';
 import { generateFixtures } from './builders/fixtures.js';
 import { generatePlaywrightConfig, generatePackageJson, generateTsConfig } from './builders/config.js';
 
@@ -72,21 +73,34 @@ function main(): void {
 
   write('pages/BasePage.ts', generateBasePage());
   if (analysis.hasAuth) {
-    write('pages/LoginPage.ts', generateLoginPage());
-    write('pages/RegisterPage.ts', generateRegisterPage());
+    write('pages/LoginPage.ts', generateLoginPage(analysis.authForms.login));
+    write('pages/RegisterPage.ts', generateRegisterPage(analysis.authForms.register));
     write('pages/DashboardPage.ts', generateDashboardPage());
-    write('tests/auth.setup.ts', generateAuthSetupSpec());
-    write('tests/auth.spec.ts', generateAuthSpec());
+    write('tests/auth.setup.ts', generateAuthSetupSpec(analysis.authForms.register));
+    write('tests/auth.spec.ts', generateAuthSpec(analysis.authForms.login, analysis.authForms.register));
   }
 
   if (analysis.hasProfile) {
-    write('pages/ProfilePage.ts', generateProfilePage());
-    write('tests/profile.spec.ts', generateProfileSpec());
+    write('pages/ProfilePage.ts', generateProfilePage(analysis.authForms.profile));
+    write('tests/profile.spec.ts', generateProfileSpec(analysis.authForms.profile));
   }
 
   for (const resource of analysis.resources) {
     write(`pages/${resource.className}Page.ts`, generateResourcePage(resource));
     write(`tests/${resource.name}.spec.ts`, generateResourceSpec(resource));
+  }
+
+  if (analysis.hasAuth) {
+    const config = getConfig();
+    const protectedPaths: string[] = [];
+    if (analysis.hasDashboard) protectedPaths.push(config.dashboardPath);
+    if (analysis.hasProfile) protectedPaths.push(config.profilePath);
+    for (const res of analysis.resources) {
+      protectedPaths.push(res.indexPath);
+    }
+    if (protectedPaths.length > 0) {
+      write('tests/auth.guest.spec.ts', generateGuestAuthSpec(protectedPaths));
+    }
   }
 
 

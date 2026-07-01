@@ -5,6 +5,7 @@ export interface FormInput {
   tag: string;
   placeholder: string | null;
   required: boolean;
+  options?: { value: string; text: string }[];
 }
 
 export interface FormData {
@@ -53,6 +54,11 @@ export interface AnalysisResult {
   hasAuth: boolean;
   hasProfile: boolean;
   hasDashboard: boolean;
+  authForms: {
+    login: FormInput[];
+    register: FormInput[];
+    profile: FormInput[];
+  };
   resources: ResourceInfo[];
 }
 

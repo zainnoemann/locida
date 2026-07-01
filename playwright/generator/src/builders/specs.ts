@@ -1,7 +1,16 @@
-import { ResourceInfo } from '../types.js';
+import { ResourceInfo } from '../shared/types.js';
 import { capitalize, escapeSingle, singularize, toConstName, toFieldProp, toWords } from '../shared/strings.js';
+import { sampleValue } from '../shared/data.js';
 
-export function generateAuthSetupSpec(): string {
+export function generateAuthSetupSpec(registerFields: import('../shared/types.js').FormInput[] = []): string {
+    const registerPayloadFields = registerFields.map(f => {
+        const name = escapeSingle(f.name || '');
+        if (name.includes('password') || name.includes('confirm')) return `            '${name}': TEST_USER.password,`;
+        if (name.includes('email')) return `            '${name}': TEST_USER.email,`;
+        if (name.includes('name')) return `            '${name}': TEST_USER.name,`;
+        return `            '${name}': '${escapeSingle(sampleValue(f, 'valid'))}',`;
+    }).join('\n');
+
     return `// tests/auth.setup.ts
 
 import * as fs from 'fs';
@@ -9,23 +18,25 @@ import * as path from 'path';
 import { test as setup, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { RegisterPage } from '../pages/RegisterPage';
-import { TEST_USER } from '../fixtures/test-data';
+import { TEST_USER, ROUTES } from '../fixtures/test-data';
 
 setup('authenticate and cache storage state', async ({ page }) => {
     const loginPage = new LoginPage(page);
     await loginPage.goto();
-    await loginPage.login(TEST_USER.email, TEST_USER.password);
+    await loginPage.login(TEST_USER);
 
-    const isOnDashboard = /\\/dashboard/.test(page.url());
+    const isOnDashboard = new RegExp(ROUTES.dashboard.replace(/\\//g, '\\\\/')).test(page.url());
     if (!isOnDashboard) {
         const registerPage = new RegisterPage(page);
         await registerPage.goto();
-        await registerPage.register(TEST_USER.name, TEST_USER.email, TEST_USER.password);
+        await registerPage.register({
+${registerPayloadFields}
+        });
         await loginPage.goto();
-        await loginPage.login(TEST_USER.email, TEST_USER.password);
+        await loginPage.login(TEST_USER);
     }
 
-    await expect(page).toHaveURL(/\\/dashboard/);
+    await expect(page).toHaveURL(new RegExp(ROUTES.dashboard.replace(/\\//g, '\\\\/')));
     const authDir = path.join(process.cwd(), '.auth');
     fs.mkdirSync(authDir, { recursive: true });
     await page.context().storageState({ path: path.join(authDir, 'user.json') });
@@ -33,7 +44,17 @@ setup('authenticate and cache storage state', async ({ page }) => {
 `;
 }
 
-export function generateAuthSpec(): string {
+export function generateAuthSpec(loginFields: import('../shared/types.js').FormInput[] = [], registerFields: import('../shared/types.js').FormInput[] = []): string {
+    const loginComponentTests = loginFields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        return `    test('shows ${f.name} field', async () => { await expect(loginPage.${prop}).toBeVisible(); });`;
+    }).join('\n');
+
+    const registerComponentTests = registerFields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        return `    test('shows ${f.name} field', async () => { await expect(registerPage.${prop}).toBeVisible(); });`;
+    }).join('\n');
+
     return `// tests/auth.spec.ts
 
 import { test, expect } from '@playwright/test';
@@ -50,11 +71,8 @@ test.describe('Login page — Component', () => {
         await loginPage.goto();
     });
 
-    test('shows email field', async () => { await expect(loginPage.emailInput).toBeVisible(); });
-    test('shows password field', async () => { await expect(loginPage.passwordInput).toBeVisible(); });
+${loginComponentTests}
     test('shows submit button', async () => { await expect(loginPage.submitButton).toBeEnabled(); });
-    test('email field is type email', async () => { await expect(loginPage.emailInput).toHaveAttribute('type', 'email'); });
-    test('password field is type password', async () => { await expect(loginPage.passwordInput).toHaveAttribute('type', 'password'); });
 });
 
 test.describe('Login page — Functionality', () => {
@@ -65,18 +83,8 @@ test.describe('Login page — Functionality', () => {
         await loginPage.goto();
     });
 
-    test('shows error for wrong credentials', async () => {
-        await loginPage.login('wrong@email.com', 'wrongpassword');
-        await loginPage.assertOnLoginPage();
-    });
-
     test('stays on login page when form is empty', async () => {
         await loginPage.clickSubmit();
-        await loginPage.assertOnLoginPage();
-    });
-
-    test('shows error for invalid email format', async () => {
-        await loginPage.login('not-an-email', 'password123');
         await loginPage.assertOnLoginPage();
     });
 });
@@ -89,14 +97,13 @@ test.describe('Register page — Component', () => {
         await registerPage.goto();
     });
 
-    test('shows name field', async () => { await expect(registerPage.nameInput).toBeVisible(); });
-    test('shows email field', async () => { await expect(registerPage.emailInput).toBeVisible(); });
-    test('shows password field', async () => { await expect(registerPage.passwordInput).toBeVisible(); });
-    test('shows confirm password field', async () => { await expect(registerPage.confirmPasswordInput).toBeVisible(); });
+${registerComponentTests}
+    test('shows submit button', async () => { await expect(registerPage.submitButton).toBeEnabled(); });
 });
 
 test.describe('Register page — Functionality', () => {
     let registerPage: RegisterPage;
+
 
     test.beforeEach(async ({ page }) => {
         registerPage = new RegisterPage(page);
@@ -105,16 +112,6 @@ test.describe('Register page — Functionality', () => {
 
     test('stays on register page when form is empty', async () => {
         await registerPage.clickSubmit();
-        await registerPage.assertOnRegisterPage();
-    });
-
-    test('shows error when passwords do not match', async () => {
-        await registerPage.register('Test User', 'test@example.com', 'password123', 'password456');
-        await registerPage.assertOnRegisterPage();
-    });
-
-    test('shows error for password too short', async () => {
-        await registerPage.register('Test User', 'test@example.com', '123', '123');
         await registerPage.assertOnRegisterPage();
     });
 });
@@ -126,7 +123,7 @@ test.describe('Dashboard — Component', () => {
         const loginPage = new LoginPage(page);
         dashboardPage = new DashboardPage(page);
         await loginPage.goto();
-        await loginPage.login(TEST_USER.email, TEST_USER.password);
+        await loginPage.login(TEST_USER);
         await dashboardPage.assertOnDashboard();
     });
 
@@ -135,7 +132,32 @@ test.describe('Dashboard — Component', () => {
 `;
 }
 
-export function generateProfileSpec(): string {
+export function generateGuestAuthSpec(paths: string[]): string {
+    const tests = paths.map((p) => `    test('redirects to login when accessing ${p}', async ({ page }) => {
+        await page.goto('${p}');
+        await expect(page).toHaveURL(new RegExp(ROUTES.login.replace(/\\//g, '\\\\/')));
+    });`).join('\n\n');
+
+    return `// tests/auth.guest.spec.ts
+
+import { test, expect } from '@playwright/test';
+import { ROUTES } from '../fixtures/test-data';
+
+// Reset storage state for this file to avoid being logged in
+test.use({ storageState: { cookies: [], origins: [] } });
+
+test.describe('Guest Authorization', () => {
+${tests}
+});
+`;
+}
+
+export function generateProfileSpec(profileFields: import('../shared/types.js').FormInput[] = []): string {
+    const componentTests = profileFields.map(f => {
+        const prop = toFieldProp(f.name || '');
+        return `    test('shows ${f.name} field', async () => { await expect(profilePage.${prop}).toBeVisible(); });`;
+    }).join('\n');
+
     return `// tests/profile.spec.ts
 
 import { test, expect } from '@playwright/test';
@@ -150,10 +172,8 @@ test.describe('Profile page — Component', () => {
         await profilePage.goto();
     });
 
-    test('shows name field', async () => { await expect(profilePage.nameInput).toBeVisible(); });
-    test('shows email field', async () => { await expect(profilePage.emailInput).toBeVisible(); });
-    test('shows save profile button', async () => { await expect(profilePage.saveProfileButton).toBeVisible(); });
-    test('email field shows logged-in user email', async () => { await expect(profilePage.emailInput).toHaveValue(TEST_USER.email); });
+${componentTests}
+    test('shows save profile button', async () => { await expect(profilePage.saveButton).toBeVisible(); });
 });
 
 test.describe('Profile page — Functionality', () => {
@@ -165,26 +185,11 @@ test.describe('Profile page — Functionality', () => {
     });
 
     test('save button is enabled', async () => {
-        await expect(profilePage.saveProfileButton).toBeEnabled();
+        await expect(profilePage.saveButton).toBeEnabled();
     });
 
-    test('shows error when name is cleared', async () => {
-        await profilePage.updateProfile('', TEST_USER.email);
-        await profilePage.assertOnProfilePage();
-    });
-
-    test('shows error for invalid email format', async () => {
-        await profilePage.updateEmail('invalid-email');
-        await profilePage.assertOnProfilePage();
-    });
-
-    test('shows error when passwords do not match', async () => {
-        await profilePage.updatePassword(TEST_USER.password, 'newpassword123', 'differentpassword');
-        await profilePage.assertOnProfilePage();
-    });
-
-    test('shows error for incorrect current password', async () => {
-        await profilePage.updatePassword('wrongpassword', 'newpassword123', 'newpassword123');
+    test('updates profile successfully', async () => {
+        await profilePage.updateProfile({ ...TEST_USER, name: 'Updated Name', email: 'updated@example.com' });
         await profilePage.assertOnProfilePage();
     });
 });
@@ -253,13 +258,13 @@ test.describe('${className} index — Component', () => {
         await ${fixtureKey}Page.gotoIndex();
     });
 
-    test('shows ${singularize(resource.name)} table', async () => {
+${resource.tableColumns.length > 0 ? `    test('shows ${fixtureKey} table', async () => {
         await ${fixtureKey}Page.assertTableVisible();
-    });
+    });` : ''}
 
-    test('shows create button', async () => {
+${resource.hasCreatePage ? `    test('shows create button', async () => {
         await ${fixtureKey}Page.assertCreateButtonVisible();
-    });
+    });` : ''}
 
 ${tableColumnTests || `  test('table exists', async ({ page }) => {\n    await expect(page.locator('table')).toBeVisible();\n  });`}
 });

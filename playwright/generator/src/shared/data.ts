@@ -1,4 +1,4 @@
-import type { FormInput } from '../types.js';
+import type { FormInput } from './types.js';
 
 export function uniqueByName(inputs: FormInput[]): FormInput[] {
   const map = new Map<string, FormInput>();
@@ -10,17 +10,49 @@ export function uniqueByName(inputs: FormInput[]): FormInput[] {
   return Array.from(map.values());
 }
 
+import { faker } from '@faker-js/faker';
+
 export function sampleValue(input: FormInput, variant: 'valid' | 'updated' | 'empty' = 'valid'): string {
   const lowerName = (input.name || '').toLowerCase();
   const type = (input.type || '').toLowerCase();
 
   if (variant === 'empty') return '';
-  if (lowerName.includes('email') || type === 'email') return variant === 'updated' ? 'updated@example.com' : 'sample@example.com';
-  if (lowerName.includes('password') || type === 'password') return variant === 'updated' ? 'playwright1234' : 'playwright';
-  if (lowerName.includes('title')) return variant === 'updated' ? 'Updated Title' : 'Sample Title';
-  if (lowerName.includes('name')) return variant === 'updated' ? 'Updated Name' : 'Sample Name';
-  if (lowerName.includes('text') || type === 'textarea') return variant === 'updated' ? 'Updated text value.' : 'Sample text value.';
-  if (type === 'number') return variant === 'updated' ? '99' : '10';
-  if (type === 'date') return '2026-01-01';
-  return variant === 'updated' ? 'Updated Value' : 'Sample Value';
+
+  if (input.options && input.options.length > 0) {
+    const validOptions = input.options.filter(o => o.value !== '');
+    if (validOptions.length > 0) {
+      return variant === 'updated' 
+        ? validOptions[validOptions.length - 1].value 
+        : validOptions[0].value;
+    }
+  }
+
+  // Faker for email
+  if (lowerName.includes('email') || type === 'email') {
+    return variant === 'updated' ? `updated_${faker.internet.email()}` : faker.internet.email();
+  }
+  // Password usually needs to be static for auth, but here it's dummy data
+  if (lowerName.includes('password') || type === 'password') {
+    return variant === 'updated' ? 'playwright1234' : 'playwright'; 
+  }
+  if (lowerName.includes('title')) {
+    return variant === 'updated' ? `Updated ${faker.lorem.words(3)}` : faker.lorem.words(3);
+  }
+  if (lowerName.includes('name')) {
+    return variant === 'updated' ? `Updated ${faker.person.fullName()}` : faker.person.fullName();
+  }
+  if (lowerName.includes('phone') || type === 'tel') {
+    return faker.phone.number();
+  }
+  if (type === 'number') {
+    return faker.number.int({ min: 1, max: 100 }).toString();
+  }
+  if (type === 'date') {
+    return faker.date.recent().toISOString().split('T')[0];
+  }
+  if (lowerName.includes('text') || type === 'textarea') {
+    return variant === 'updated' ? `Updated ${faker.lorem.sentence()}` : faker.lorem.sentence();
+  }
+  
+  return variant === 'updated' ? 'Updated Value' : faker.lorem.word();
 }

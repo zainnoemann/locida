@@ -12,13 +12,17 @@ export function capitalize(value: string): string {
 }
 
 export function singularize(name: string): string {
-  if (name.endsWith('ies')) return `${name.slice(0, -3)}y`;
-  if (name.endsWith('s')) return name.slice(0, -1);
-  return name;
+  const parts = name.split('/');
+  const last = parts.pop() || '';
+  let singular = last;
+  if (last.endsWith('ies')) singular = `${last.slice(0, -3)}y`;
+  else if (last.endsWith('s')) singular = last.slice(0, -1);
+  return [...parts, singular].join('/');
 }
 
 export function toClassName(resourceName: string): string {
-  return capitalize(singularize(resourceName));
+  const singular = singularize(resourceName);
+  return singular.split(/[\/-]/).map(capitalize).join('');
 }
 
 export function toConstName(resourceName: string): string {

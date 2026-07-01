@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { ExtractedPageData } from '../types.js';
+import { ExtractedPageData } from '../shared/types.js';
 import { normalizePathname } from '../shared/strings.js';
 
 export function loadDatasets(datasetDir: string): Map<string, ExtractedPageData> {

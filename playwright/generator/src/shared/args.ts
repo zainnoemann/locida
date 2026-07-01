@@ -1,5 +1,5 @@
 import path from 'path';
-import { CliDefaults, CliResult, GeneratorOptions } from '../types.js';
+import { CliDefaults, CliResult, GeneratorOptions } from './types.js';
 
 function flag(args: string[], name: string): string | undefined {
   const i = args.indexOf(name);
@@ -40,7 +40,7 @@ OPTIONS:
     --user-name           Test user display name       (default: Test User)
 
     --gitea-server-url    Gitea server URL             (default: http://gitea:3000)
-    --gitea-app-host      Laravel app host in CI job   (default: 127.0.0.1:8000)
+    --ci-app-host         Laravel app host in CI job   (default: 127.0.0.1:8000)
     --gitea-image         Playwright Docker image      (default: mcr.microsoft.com/playwright:v1.58.2-jammy)
     --gitea-branch        CI trigger branch            (default: main)
     --gitea-cache-vol     npm cache volume name        (default: playwright-npm-cache)
@@ -67,7 +67,7 @@ export function parseArgs(args: string[], defaults: CliDefaults): CliResult {
     },
     gitea: {
       serverUrl: flag(args, '--gitea-server-url') || 'http://gitea:3000',
-      appHost: flag(args, '--gitea-app-host') || 'host.docker.internal:8000',
+      appHost: flag(args, '--ci-app-host') || 'host.docker.internal:8000',
       playwrightImage: flag(args, '--gitea-image') || 'mcr.microsoft.com/playwright:v1.58.2-jammy',
       branch: flag(args, '--gitea-branch') || 'playwright',
       npmCacheVolume: flag(args, '--gitea-cache-vol') || 'playwright-npm-cache',

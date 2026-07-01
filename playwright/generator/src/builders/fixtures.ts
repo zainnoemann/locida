@@ -1,6 +1,7 @@
-import { GeneratorOptions, ResourceInfo } from '../types.js';
+import { GeneratorOptions, ResourceInfo } from '../shared/types.js';
 import { escapeSingle, toConstName } from '../shared/strings.js';
 import { sampleValue } from '../shared/data.js';
+import { getConfig } from '../shared/config.js';
 
 export function generateFixtures(resources: ResourceInfo[], opts: GeneratorOptions): string {
   const resourceBlocks = resources
@@ -17,21 +18,23 @@ export function generateFixtures(resources: ResourceInfo[], opts: GeneratorOptio
     .map((resource) => `  ${resource.name}: { index: '${resource.indexPath}', create: '${resource.createPath}' },`)
     .join('\n');
 
+  const config = getConfig();
+
   return `// fixtures/test-data.ts
 
 export const TEST_USER = {
-    name: '${escapeSingle(opts.testUser.name)}',
-    email: '${escapeSingle(opts.testUser.email)}',
-    password: '${escapeSingle(opts.testUser.password)}',
+    name: process.env.TEST_NAME || '${escapeSingle(opts.testUser.name)}',
+    email: process.env.TEST_EMAIL || '${escapeSingle(opts.testUser.email)}',
+    password: process.env.TEST_PASSWORD || '${escapeSingle(opts.testUser.password)}',
 };
 
 ${resourceBlocks}
 
 export const ROUTES = {
-    login: '/login',
-    register: '/register',
-    dashboard: '/dashboard',
-    profile: '/profile',
+    login: '${config.loginPath}',
+    register: '${config.registerPath}',
+    dashboard: '${config.dashboardPath}',
+    profile: '${config.profilePath}',
 ${routeResources ? `${routeResources}` : ''}
 };
 `;
