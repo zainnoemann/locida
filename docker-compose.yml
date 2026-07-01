@@ -128,6 +128,7 @@ services:
         volumes:
             - act_runner_data:/data
             - /var/run/docker.sock:/var/run/docker.sock
+            - ./docker/act_runner/config.yaml:/data/config.yaml:ro
         command: >-
             sh -c "
             if [ ! -f /data/.runner ]; then
@@ -138,6 +139,28 @@ services:
         networks:
             - locida
 
+    registry:
+        image: registry:3
+        container_name: locida-registry
+        restart: unless-stopped
+        ports:
+            - "5000:5000"
+        volumes:
+            - registry_data:/var/lib/registry
+        networks:
+            - locida
+
+    verdaccio:
+        image: verdaccio/verdaccio:6
+        container_name: locida-verdaccio
+        restart: unless-stopped
+        ports:
+            - "4873:4873"
+        volumes:
+            - verdaccio_data:/verdaccio/storage
+        networks:
+            - locida
+
 volumes:
     db_data:
     redis_data:
@@ -145,6 +168,8 @@ volumes:
     storage_data:
     gitea_data:
     act_runner_data:
+    registry_data:
+    verdaccio_data:
 
 networks:
     locida:
