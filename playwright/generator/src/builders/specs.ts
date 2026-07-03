@@ -189,7 +189,15 @@ test.describe('Profile page — Functionality', () => {
     });
 
     test('updates profile successfully', async () => {
-        await profilePage.updateProfile({ ...TEST_USER, name: 'Updated Name', email: 'updated@example.com' });
+        await profilePage.updateProfile({
+${profileFields.map(f => {
+    const name = escapeSingle(f.name || '');
+    if (name.includes('password') || name.includes('confirm')) return `            '${name}': TEST_USER.password,`;
+    if (name.includes('email')) return `            '${name}': TEST_USER.email,`;
+    if (name.includes('name')) return `            '${name}': TEST_USER.name + ' Updated',`;
+    return `            '${name}': '${escapeSingle(sampleValue(f, 'updated'))}',`;
+}).join('\n')}
+        });
         await profilePage.assertOnProfilePage();
     });
 });
