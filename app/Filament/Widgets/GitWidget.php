@@ -11,7 +11,7 @@ use Filament\Widgets\Widget;
 class GitWidget extends Widget
 {
     public string $gitUrl;
-    public string $gitVersion;
+
     public string $gitName;
     protected string $view = 'filament.widgets.git-widget';
 
@@ -23,8 +23,7 @@ class GitWidget extends Widget
     public function mount(GitInterface $git): void
     {
         $this->gitUrl = rtrim($git->getRootUrl(), '/') . '/';
-        $version = $git->getVersion();
-        $this->gitVersion = $version !== null ? 'v' . $version : '';
+
         $this->gitName = ucfirst(config('services.git.default', 'gitea'));
     }
 
@@ -33,8 +32,4 @@ class GitWidget extends Widget
         return $this->gitName;
     }
 
-    public function getDescription(): string
-    {
-        return $this->gitVersion;
-    }
 }

@@ -10,12 +10,7 @@
                     {{ $gitName }}
                 </h2>
 
-                {{-- Display the fetched Git version if available --}}
-                @if ($gitVersion !== '')
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ $gitVersion }}
-                    </p>
-                @endif
+
             </div>
 
             <div class="shrink-0">

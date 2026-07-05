@@ -134,15 +134,7 @@ class GitHubService implements GitInterface
         return null;
     }
 
-    public function getVersion(): ?string
-    {
-        // GitHub API doesn't expose a simple version endpoint like Gitea does.
-        // We'll return "cloud" or similar depending on the URL.
-        if (str_contains($this->apiUrl, 'api.github.com')) {
-            return 'Cloud';
-        }
-        return 'Enterprise';
-    }
+
 
     public function getRepositories(): array
     {

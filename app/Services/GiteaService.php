@@ -187,38 +187,7 @@ class GiteaService implements \App\Contracts\GitInterface
         return null;
     }
 
-    /**
-     * Retrieves the version of the configured Gitea instance.
-     * Results are cached for 1 hour to minimize unnecessary API calls.
-     *
-     * @return string|null The Gitea semantic version string.
-     */
-    public function getVersion(): ?string
-    {
-        if (empty($this->rootUrl)) {
-            return null;
-        }
 
-        return Cache::remember('gitea.version', now()->addHours(1), function (): ?string {
-            try {
-                $response = Http::timeout(10)
-                    ->retry(2, 200)
-                    ->get(rtrim($this->rootUrl, '/') . '/api/v1/version');
-
-                if (! $response->successful()) {
-                    return null;
-                }
-
-                $version = $response->json('version');
-
-                return is_string($version) && $version !== '' ? $version : null;
-            } catch (Throwable $e) {
-                Log::warning('Exception while fetching Gitea version.', ['message' => $e->getMessage()]);
-
-                return null;
-            }
-        });
-    }
 
     /**
      * Fetches a list of repositories accessible to the authenticated user.

@@ -69,12 +69,7 @@ interface GitInterface
      */
     public function getRepositoryContent(string $owner, string $repo, string $path, string $ref): ?array;
 
-    /**
-     * Retrieves the version of the configured Git instance/API.
-     *
-     * @return string|null
-     */
-    public function getVersion(): ?string;
+
 
     /**
      * Fetches a list of repositories accessible to the authenticated user.
