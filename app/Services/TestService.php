@@ -23,9 +23,6 @@ class TestService
      */
     private const ACTIONS_MAX_WAIT_SECONDS = 900;
 
-    private const DEFAULT_SOURCE_BRANCH = 'main';
-    private const DEFAULT_TEST_BRANCH = 'playwright';
-
     public function __construct(
         private GitInterface $git,
         private WebCrawlerService $crawler,
@@ -49,7 +46,8 @@ class TestService
             return false;
         }
 
-        $logFile = storage_path("app/generator-logs/test-{$test->id}.log");
+        $path = config('filesystems.locida.paths.logs');
+        $logFile = storage_path("{$path}/test-{$test->id}.log");
         $logDir = dirname($logFile);
 
         if (! File::exists($logDir)) {
@@ -77,7 +75,7 @@ class TestService
     {
         $test->refresh();
 
-        return $test->status === Test::STATUS_CANCELLED;
+        return $test->isCancelled();
     }
 
     /**
@@ -88,7 +86,8 @@ class TestService
      */
     public function initializeLogFile(Test $test): string
     {
-        $logFile = storage_path("app/generator-logs/test-{$test->id}.log");
+        $path = config('filesystems.locida.paths.logs');
+        $logFile = storage_path("{$path}/test-{$test->id}.log");
         $logDir = dirname($logFile);
 
         if (! File::exists($logDir)) {
@@ -219,7 +218,8 @@ class TestService
             }
 
             // Substitute localhost references for Docker network compatibility
-            $cloneUrl = str_replace(['localhost:3000', '127.0.0.1:3000'], 'gitea:3000', $cloneUrl);
+            $giteaHost = config('services.gitea.internal_host', 'gitea:3000');
+            $cloneUrl = preg_replace('/(localhost|127\.0\.0\.1)(:\d+)?/', $giteaHost, $cloneUrl);
             $gitUrl = $this->buildAuthenticatedGitUrl($cloneUrl, $gitToken, $test->repo_name);
 
             // Pass log append callback
@@ -278,30 +278,26 @@ class TestService
         }
     }
 
-    /**
-     * Retrieves the source branch name, defaulting if not set.
-     *
-     * @param Test $test
-     * @return string
-     */
     public function resolveSourceBranch(Test $test): string
     {
         $branch = trim((string) ($test->source_branch ?? ''));
 
-        return $branch !== '' ? $branch : self::DEFAULT_SOURCE_BRANCH;
+        if ($branch === '') {
+            throw new \InvalidArgumentException('Source branch is required but was not provided.');
+        }
+
+        return $branch;
     }
 
-    /**
-     * Retrieves the target test branch name, defaulting if not set.
-     *
-     * @param Test $test
-     * @return string
-     */
     public function resolveTestBranch(Test $test): string
     {
         $branch = trim((string) ($test->test_branch ?? ''));
 
-        return $branch !== '' ? $branch : self::DEFAULT_TEST_BRANCH;
+        if ($branch === '') {
+            throw new \InvalidArgumentException('Test branch is required but was not provided.');
+        }
+
+        return $branch;
     }
 
     /**
@@ -313,21 +309,20 @@ class TestService
      */
     public function resolveGitIdentity(?string $fullName): array
     {
-        $username = 'locida-bot';
+        $user = $this->git->getAuthenticatedUser();
 
-        if (! empty($fullName) && str_contains($fullName, '/')) {
-            [$owner] = explode('/', $fullName, 2);
-            if (! empty($owner)) {
-                $username = $owner;
+        $username = $user['login'] ?? $user['username'] ?? 'locida-bot';
+        $email = $user['email'] ?? '';
+
+        if (empty($email)) {
+            $emailLocalPart = preg_replace('/[^a-zA-Z0-9._-]/', '', $username);
+            if (empty($emailLocalPart)) {
+                $emailLocalPart = 'locida-bot';
             }
+            $email = $emailLocalPart . '@users.noreply.git.local';
         }
 
-        $emailLocalPart = preg_replace('/[^a-zA-Z0-9._-]/', '', $username);
-        if (empty($emailLocalPart)) {
-            $emailLocalPart = 'locida-bot';
-        }
-
-        return [$username, $emailLocalPart . '@users.noreply.git.local'];
+        return [$username, $email];
     }
 
     /**
@@ -374,7 +369,8 @@ class TestService
             preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string) $test->test_branch),
         ], fn (string $part): bool => $part !== ''));
 
-        $storagePath = storage_path('app/latest-tests/' . $workspaceKey);
+        $path = config('filesystems.locida.paths.tests');
+        $storagePath = storage_path("{$path}/" . $workspaceKey);
 
         return [
             'storage' => $storagePath,
@@ -536,6 +532,10 @@ class TestService
     {
         $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing Playwright crawler, generator, and workflows to branch {$testBranch}...\n");
 
+        $parsedGitUrl = parse_url($gitUrl);
+        $gitProtocol = $parsedGitUrl['scheme'] ?? 'http';
+        $gitHost = $parsedGitUrl['host'] ?? 'gitea';
+
         $gitCommands = [
             'git config --global --add safe.directory ' . escapeshellarg($outputDir),
             'git checkout -b ' . escapeshellarg($testBranch),
@@ -544,8 +544,7 @@ class TestService
             'git add .',
             'git commit --allow-empty -m "chore(playwright): setup automation for crawler and test generator"',
             '(git remote remove origin 2>/dev/null || true)',
-            "git credential reject <<EOF\nprotocol=https\nhost=github.com\nEOF",
-            "git credential reject <<EOF\nprotocol=http\nhost=gitea\nEOF",
+            "git credential reject <<EOF\nprotocol={$gitProtocol}\nhost={$gitHost}\nEOF",
             'git remote add origin ' . escapeshellarg($gitUrl) . ' || git remote set-url origin ' . escapeshellarg($gitUrl),
             'git push -u origin ' . escapeshellarg($testBranch) . ' --force',
         ];

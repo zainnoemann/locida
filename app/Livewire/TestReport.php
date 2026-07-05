@@ -16,7 +16,7 @@ use Livewire\Component;
  */
 class TestReport extends Component
 {
-    private const DEFAULT_TEST_BRANCH = 'playwright';
+
     private const PRIMARY_REPORT_BASE_PATH = 'playwright/generator/reports';
     private const PRIMARY_HTML_REPORT_FILE = 'index.html';
     private const PRIMARY_REPORT_JSON_FILE = 'report.json';
@@ -207,7 +207,11 @@ class TestReport extends Component
     {
         $branch = trim((string) ($test->test_branch ?? ''));
 
-        return $branch !== '' ? $branch : self::DEFAULT_TEST_BRANCH;
+        if ($branch === '') {
+            throw new \InvalidArgumentException('Test branch is missing or empty.');
+        }
+
+        return $branch;
     }
 
     /**
@@ -218,21 +222,10 @@ class TestReport extends Component
      */
     private function fetchReportJson(string $owner, string $repo, string $testBranch): ?array
     {
-        $candidatePaths = [
-            $this->primaryReportPath(self::PRIMARY_REPORT_JSON_FILE),
-            // backward compatibility with older generated workflows/branches
-            'playwright/reports/report.json',
-            'playwright/playwright-report/report.json',
-            'playwright-report/report.json',
-            'report.json',
-        ];
+        $path = $this->primaryReportPath(self::PRIMARY_REPORT_JSON_FILE);
 
-        foreach ($candidatePaths as $path) {
-            $decoded = $this->fetchRepositoryFileContent($owner, $repo, $path, $testBranch);
-            if ($decoded === null) {
-                continue;
-            }
-
+        $decoded = $this->fetchRepositoryFileContent($owner, $repo, $path, $testBranch);
+        if ($decoded !== null) {
             $json = json_decode($decoded, true);
             if (is_array($json)) {
                 return $json;
@@ -308,7 +301,7 @@ class TestReport extends Component
             );
         }
 
-        return URL::temporarySignedRoute('playwright-reports.index', now()->addMinutes(30), [
+        return URL::temporarySignedRoute('reports.index', now()->addMinutes(30), [
             'test' => $test->id,
         ]);
     }
@@ -374,7 +367,8 @@ class TestReport extends Component
 
     private function storedHtmlReportBaseDirectory(int $testId): string
     {
-        return storage_path("app/playwright/test-{$testId}/reports");
+        $path = config('filesystems.locida.paths.playwright');
+        return storage_path("{$path}/test-{$testId}/reports");
     }
 
     private function storedHtmlReportDirectory(int $testId): string
@@ -405,7 +399,7 @@ class TestReport extends Component
             return null;
         }
 
-        return URL::temporarySignedRoute('playwright-reports.index', now()->addMinutes(30), [
+        return URL::temporarySignedRoute('reports.index', now()->addMinutes(30), [
             'test' => $testId,
         ]);
     }

@@ -67,7 +67,8 @@ class TestLog extends Component
      */
     public function getLogsProperty(): string
     {
-        $logFile = storage_path("app/generator-logs/test-{$this->testId}.log");
+        $path = config('filesystems.locida.paths.logs');
+        $logFile = storage_path("{$path}/test-{$this->testId}.log");
 
         if (!File::exists($logFile)) {
             return "Waiting for generator to start...\n";
@@ -248,7 +249,8 @@ class TestLog extends Component
                 } elseif ($stages[$i]['status'] === 'active') {
                     $duration = max(0, $start->diffInSeconds(now()));
                 } elseif ($stages[$i]['status'] === 'failed') {
-                    $logFile = storage_path("app/generator-logs/test-{$this->testId}.log");
+                    $path = config('filesystems.locida.paths.logs');
+                    $logFile = storage_path("{$path}/test-{$this->testId}.log");
                     if (File::exists($logFile)) {
                         $duration = max(0, $start->diffInSeconds(Carbon::createFromTimestamp(File::lastModified($logFile))));
                     } else {

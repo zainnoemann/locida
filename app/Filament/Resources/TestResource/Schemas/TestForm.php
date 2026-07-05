@@ -107,7 +107,6 @@ class TestForm
                     })
                     ->placeholder('Select a branch')
                     ->required()
-                    ->default('main')
                     ->helperText('Select the source repository branch used for test generation.')
                     ->searchable()
                     ->preload()
