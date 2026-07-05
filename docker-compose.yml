@@ -122,7 +122,7 @@ services:
         depends_on:
             - gitea
         environment:
-            GITEA_INSTANCE_URL: http://gitea:3000
+            GITEA_INSTANCE_URL: http://${GITEA_INTERNAL_HOST}
             GITEA_RUNNER_REGISTRATION_TOKEN: ${GITEA_RUNNER_REGISTRATION_TOKEN}
             GITEA_RUNNER_NAME: locida-act-runner
         volumes:
