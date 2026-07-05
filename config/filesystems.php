@@ -77,4 +77,12 @@ return [
         public_path('storage') => storage_path('app/public'),
     ],
 
+    'locida' => [
+        'paths' => [
+            'logs'       => 'app/logs',
+            'tests'      => 'app/tests',
+            'playwright' => 'app/playwright',
+        ],
+    ],
+
 ];

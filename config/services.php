@@ -40,6 +40,7 @@ return [
     ],
 
     'gitea' => [
+        'internal_host' => env('GITEA_INTERNAL_HOST'),
         'root_url' => env('GITEA_ROOT_URL'),
         'url' => env('GITEA_API_URL'),
         'token' => env('GITEA_API_TOKEN'),
