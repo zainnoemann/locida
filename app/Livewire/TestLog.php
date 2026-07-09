@@ -20,12 +20,56 @@ class TestLog extends Component
      * @var array<int, array{key: string, label: string, marker: string}>
      */
     private const TIMELINE_STAGES = [
-        ['key' => 'start', 'label' => 'Start', 'marker' => 'Starting generator process'],
-        ['key' => 'init', 'label' => 'Test Initialization', 'marker' => 'Cloning source'],
-        ['key' => 'generate', 'label' => 'Test Generation', 'marker' => 'Discovering guest routes'],
-        ['key' => 'execute', 'label' => 'Test Execution', 'marker' => 'tests using '],
-        ['key' => 'report', 'label' => 'Test Reporting', 'marker' => 'Playwright report available'],
-        ['key' => 'done', 'label' => 'Completed', 'marker' => 'Done.'],
+        [
+            'key' => 'provisioning',
+            'label' => 'Provisioning',
+            'marker' => 'Starting generator process',
+            'subtasks' => [
+                ['label' => 'Setup Workspace', 'marker' => 'Starting generator process'],
+                ['label' => 'Stage Environment', 'marker' => 'Cloning source from'],
+                ['label' => 'Deploy Application', 'marker' => 'Starting Playwright tests on Gitea Actions run'],
+            ]
+        ],
+        [
+            'key' => 'discovery',
+            'label' => 'Discovery',
+            'marker' => 'Discovering guest routes',
+            'subtasks' => [
+                ['label' => 'Scan Guest Routes', 'marker' => 'Discovering guest routes'],
+                ['label' => 'Generate Guest Data', 'marker' => 'Extracting guest route'],
+                ['label' => 'Authenticate Session', 'marker' => 'Authenticating session'],
+                ['label' => 'Scan Auth Routes', 'marker' => 'Discovering auth routes'],
+                ['label' => 'Generate Auth Data', 'marker' => 'Extracting auth route'],
+                ['label' => 'Analyze Crawl Data', 'marker' => 'Analysing dataset'],
+            ]
+        ],
+        [
+            'key' => 'generation',
+            'label' => 'Generation',
+            'marker' => 'Generating Page Objects',
+            'subtasks' => [
+                ['label' => 'Build Page Objects', 'marker' => 'Generating Page Objects'],
+                ['label' => 'Build Test Specs', 'marker' => 'Generating Test Specs'],
+                ['label' => 'Build Configuration', 'marker' => 'Generating Playwright Configuration'],
+            ]
+        ],
+        [
+            'key' => 'execution',
+            'label' => 'Execution',
+            'marker' => 'tests using ',
+            'subtasks' => [
+                ['label' => 'Run Playwright Tests', 'marker' => 'tests using '],
+            ]
+        ],
+        [
+            'key' => 'feedback',
+            'label' => 'Feedback',
+            'marker' => 'Playwright report available',
+            'subtasks' => [
+                ['label' => 'Publish Report', 'marker' => 'Playwright report available'],
+                ['label' => 'Teardown Workspace', 'marker' => 'Done'],
+            ]
+        ],
     ];
 
     /**
@@ -71,7 +115,7 @@ class TestLog extends Component
         $logFile = storage_path("{$path}/test-{$this->testId}.log");
 
         if (!File::exists($logFile)) {
-            return "Waiting for generator to start...\n";
+            return "Waiting for generator to start\n";
         }
 
         return File::get($logFile);
@@ -110,7 +154,13 @@ class TestLog extends Component
                 'stages' => array_map(static fn (array $stage): array => [
                     'key' => $stage['key'],
                     'label' => $stage['label'],
+                    'description' => $stage['description'] ?? '',
                     'status' => 'pending',
+                    'subtasks' => array_map(static fn (array $st): array => [
+                        'label' => $st['label'],
+                        'status' => 'pending',
+                        'marker' => $st['marker']
+                    ], $stage['subtasks'] ?? []),
                 ], self::TIMELINE_STAGES),
             ];
         }
@@ -153,8 +203,8 @@ class TestLog extends Component
         $activeStageKey = null;
         $completedStageKey = null;
 
-        if (isset($stagePositions['done'])) {
-            $completedStageKey = 'done';
+        if (isset($stagePositions['closure'])) {
+            $completedStageKey = 'closure';
         } else {
             // Find the most recently triggered stage
             foreach (array_reverse(self::TIMELINE_STAGES) as $stage) {
@@ -165,7 +215,7 @@ class TestLog extends Component
             }
 
             if ($activeStageKey === null) {
-                $activeStageKey = 'start';
+                $activeStageKey = 'setup';
             }
         }
 
@@ -205,10 +255,65 @@ class TestLog extends Component
                 }
             }
 
+            $stageSubtasks = [];
+            $subtasks = $stage['subtasks'] ?? [];
+            foreach ($subtasks as $idx => $subtask) {
+                $subStatus = 'pending';
+                $subPosition = strpos($logs, $subtask['marker']);
+                $nextSubtask = $subtasks[$idx + 1] ?? null;
+                $nextSubPosition = $nextSubtask ? strpos($logs, $nextSubtask['marker']) : false;
+                
+                if ($status === 'done') {
+                    $subStatus = 'done';
+                } elseif ($status === 'failed' || $status === 'cancelled') {
+                     $terminalPos = $failurePosition ?? $cancellationPosition ?? PHP_INT_MAX;
+                     if ($subPosition !== false && $subPosition < $terminalPos) {
+                         if ($nextSubPosition !== false && $nextSubPosition < $terminalPos) {
+                             $subStatus = 'done';
+                         } else {
+                             $subStatus = $status;
+                         }
+                     }
+                } else {
+                     if ($subPosition !== false) {
+                         if ($nextSubPosition !== false) {
+                             $subStatus = 'done';
+                         } else {
+                             $subStatus = 'active';
+                         }
+                     }
+                }
+                
+                $stageSubtasks[] = [
+                    'label' => $subtask['label'],
+                    'status' => $subStatus,
+                    'marker' => $subtask['marker'],
+                ];
+            }
+
+            // if stage is active, make the first 'pending' subtask 'active'
+            if ($status === 'active') {
+                $hasActive = false;
+                foreach ($stageSubtasks as $idx => $st) {
+                     if ($st['status'] === 'done' || $st['status'] === 'active') {
+                         if ($st['status'] === 'active') {
+                             $hasActive = true;
+                         }
+                         continue;
+                     }
+                     if (!$hasActive) {
+                         $stageSubtasks[$idx]['status'] = 'active';
+                         $hasActive = true;
+                     }
+                }
+            }
+
             $stages[] = [
                 'key' => $stage['key'],
                 'label' => $stage['label'],
+                'description' => $stage['description'] ?? '',
                 'status' => $status,
+                'subtasks' => $stageSubtasks,
             ];
         }
 
@@ -235,7 +340,32 @@ class TestLog extends Component
             }
         }
 
-        // 6. Calculate durations between timestamps
+        // 6. Find the last timestamp in the entire log to use for ongoing stages
+        $lastLogTimestamp = null;
+        $pattern = '/(?:\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]|(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?Z)/';
+        if (preg_match_all($pattern, $logs, $matches)) {
+            $lastTimestampStr1 = end($matches[1]);
+            $lastTimestampStr2 = end($matches[2]);
+            if (!empty($lastTimestampStr1)) {
+                $lastLogTimestamp = Carbon::createFromFormat('Y-m-d H:i:s', $lastTimestampStr1);
+            } elseif (!empty($lastTimestampStr2)) {
+                $lastLogTimestamp = Carbon::createFromFormat('Y-m-d H:i:s', str_replace('T', ' ', $lastTimestampStr2), 'UTC')->setTimezone(config('app.timezone', 'UTC'));
+            }
+        }
+        $virtualNow = now();
+        if ($lastLogTimestamp) {
+            $path = config('filesystems.locida.paths.logs');
+            $logFile = storage_path("{$path}/test-{$this->testId}.log");
+            if (File::exists($logFile)) {
+                $lastModified = Carbon::createFromTimestamp(File::lastModified($logFile));
+                $skew = $lastModified->diffInSeconds($lastLogTimestamp, false);
+                $virtualNow = now()->addSeconds($skew);
+            } else {
+                $virtualNow = $lastLogTimestamp;
+            }
+        }
+
+        // 7. Calculate durations between timestamps
         for ($i = 0; $i < count($stages); $i++) {
             $currentKey = $stages[$i]['key'];
             $nextKey = $stages[$i + 1]['key'] ?? null;
@@ -247,22 +377,17 @@ class TestLog extends Component
                 if ($end) {
                     $duration = max(0, $start->diffInSeconds($end));
                 } elseif ($stages[$i]['status'] === 'active') {
-                    $duration = max(0, $start->diffInSeconds(now()));
-                } elseif ($stages[$i]['status'] === 'failed') {
-                    $path = config('filesystems.locida.paths.logs');
-                    $logFile = storage_path("{$path}/test-{$this->testId}.log");
-                    if (File::exists($logFile)) {
-                        $duration = max(0, $start->diffInSeconds(Carbon::createFromTimestamp(File::lastModified($logFile))));
-                    } else {
-                        $duration = null;
-                    }
+                    $duration = max(0, $start->diffInSeconds($virtualNow));
+                } elseif (in_array($stages[$i]['status'], ['failed', 'cancelled', 'done'])) {
+                    $duration = max(0, $start->diffInSeconds($lastLogTimestamp ?? $virtualNow));
                 } else {
                     $duration = null;
                 }
 
                 if ($duration !== null) {
+                    $duration = (int) round($duration);
                     if ($duration >= 60) {
-                        $m = floor($duration / 60);
+                        $m = (int) floor($duration / 60);
                         $s = $duration % 60;
                         $durationStr = "{$m}m {$s}s";
                     } else {
@@ -273,7 +398,7 @@ class TestLog extends Component
             $stages[$i]['duration'] = $durationStr;
         }
 
-        // 7. Filter out synthetic start/done milestones for UI presentation
+        // 8. Filter out synthetic start/done milestones for UI presentation
         $filteredStages = array_values(array_filter($stages, function ($s) {
             return !in_array($s['key'], ['start', 'done']);
         }));

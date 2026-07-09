@@ -25,9 +25,7 @@ class TestService
 
     public function __construct(
         private GitInterface $git,
-        private WebCrawlerService $crawler,
-        private ScriptGeneratorService $generator,
-        private TestRunnerService $runner
+        private PipelineService $pipeline
     ) {
     }
 
@@ -54,7 +52,7 @@ class TestService
             File::makeDirectory($logDir, 0755, true);
         }
 
-        File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Generation cancelled by user.\n");
+        File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Generation cancelled by user\n");
 
         $test->update([
             'status' => Test::STATUS_CANCELLED,
@@ -94,7 +92,7 @@ class TestService
             File::makeDirectory($logDir, 0755, true);
         }
 
-        File::put($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Starting generator process for {$test->name}...\n");
+        File::put($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Starting generator process for {$test->name}\n");
 
         return $logFile;
     }
@@ -142,8 +140,8 @@ class TestService
      */
     public function markTestCompleted(Test $test, string $logFile): void
     {
-        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Playwright report available on Git Actions.\n");
-        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Done.\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Playwright report available on Git Actions\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Done\n");
 
         $test->update([
             'status' => Test::STATUS_COMPLETED,
@@ -153,21 +151,7 @@ class TestService
         ]);
     }
 
-    /**
-     * Delegates the polling of Playwright action workflows in the Git to the runner service.
-     *
-     * @param string $logFile
-     * @param string $repoFullName
-     * @param string $testBranch
-     * @param string $headSha
-     * @param Test $test
-     * @param int|null &$trackedRunId Reference to the current run ID being monitored.
-     * @return array Status information from the runner service.
-     */
-    public function pollPlaywrightActions(string $logFile, string $repoFullName, string $testBranch, string $headSha, Test $test, ?int &$trackedRunId): array
-    {
-        return $this->runner->pollPlaywrightActions($logFile, $repoFullName, $testBranch, $headSha, $test, $trackedRunId);
-    }
+
 
     /**
      * Main orchestration method for generating a Playwright test suite.
@@ -239,11 +223,10 @@ class TestService
             }
 
             $this->prepareOutputRepository($paths['clone'], $paths['output']);
-            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Staging Playwright crawler, generator, and workflows...\n");
+            $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Staging Playwright crawler, generator, and workflows\n");
 
-            $this->crawler->prepareCrawler($paths['output']);
-            $this->generator->prepareGenerator($paths['output']);
-            $this->runner->prepareWorkflow($paths['output'], $test);
+            $this->stagePlaywrightScripts($paths['output']);
+            $this->pipeline->prepareWorkflow($paths['output'], $test);
 
             if ($this->isGenerationCancelled($test)) {
                 return;
@@ -259,7 +242,7 @@ class TestService
 
             $headSha = $this->resolveHeadSha($paths['output']);
 
-            $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Dispatching polling job to monitor Actions...\n");
+            $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Dispatching polling job to monitor Actions\n");
 
             $deadline = time() + self::ACTIONS_MAX_WAIT_SECONDS;
             PollTestJob::dispatch(
@@ -441,6 +424,33 @@ class TestService
     }
 
     /**
+     * Prepares the Playwright crawler and generator scaffolding inside the repository workspace.
+     *
+     * @param string $outputDir The path to the working directory.
+     */
+    private function stagePlaywrightScripts(string $outputDir): void
+    {
+        $playwrightDir = $outputDir . '/playwright';
+        if (!File::exists($playwrightDir)) {
+            File::makeDirectory($playwrightDir, 0755, true);
+        }
+
+        $this->publishSupportProject(
+            base_path('playwright/crawler'),
+            $playwrightDir . '/crawler',
+            ['src'],
+            ['package.json', 'package-lock.json', 'tsconfig.json', '.env.example']
+        );
+
+        $this->publishSupportProject(
+            base_path('playwright/generator'),
+            $playwrightDir . '/generator',
+            ['src'],
+            ['package.json', 'package-lock.json', 'tsconfig.json']
+        );
+    }
+
+    /**
      * Copies support files and directories from a source template location to the target output location.
      * Used by crawler, generator, and runner services to inject Playwright scaffolds.
      *
@@ -488,7 +498,7 @@ class TestService
      */
     public function cloneSourceRepository(Test $test, string $logFile, string $gitUrl, string $cloneDir, string $sourceBranch): bool
     {
-        $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Cloning source from {$test->repo_url} (branch: {$sourceBranch})...\n");
+        $this->appendLog($logFile, "[" . now()->format('Y-m-d H:i:s') . "] Cloning source from {$test->repo_url} (branch: {$sourceBranch})\n");
 
         $cloneProcess = Process::run(
             'git clone --depth 1 --branch ' . escapeshellarg($sourceBranch)
@@ -497,7 +507,7 @@ class TestService
             . ' '
             . escapeshellarg($cloneDir),
             function (string $type, string $output) use ($logFile) {
-                File::append($logFile, $output);
+                File::append($logFile, preg_replace('/\.+(?=\r?\n|$)/', '', $output));
             }
         );
 
@@ -530,7 +540,7 @@ class TestService
      */
     public function pushPlaywrightBranch(Test $test, string $logFile, string $outputDir, string $gitUrl, string $gitIdentityName, string $gitIdentityEmail, string $testBranch): bool
     {
-        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing Playwright crawler, generator, and workflows to branch {$testBranch}...\n");
+        $this->appendLog($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Committing and pushing Playwright crawler, generator, and workflows to branch {$testBranch}\n");
 
         $parsedGitUrl = parse_url($gitUrl);
         $gitProtocol = $parsedGitUrl['scheme'] ?? 'http';
@@ -553,7 +563,7 @@ class TestService
             $process = Process::path($outputDir)
                 ->env(['GIT_TERMINAL_PROMPT' => '0'])
                 ->run($cmd, function (string $type, string $output) use ($logFile) {
-                    File::append($logFile, $output);
+                    File::append($logFile, preg_replace('/\.+(?=\r?\n|$)/', '', $output));
                 });
 
             if (! $process->failed()) {

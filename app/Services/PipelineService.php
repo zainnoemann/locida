@@ -13,7 +13,7 @@ use ZipArchive;
  * Service responsible for staging workflows and monitoring Playwright execution on Gitea Actions.
  * It manages the polling lifecycle, log streaming, and normalization of Gitea API responses.
  */
-class TestRunnerService
+class PipelineService
 {
     private const ACTIONS_POLL_INTERVAL_SECONDS = 5;
     private const ACTIONS_MAX_WAIT_SECONDS = 900;
@@ -349,14 +349,14 @@ class TestRunnerService
                 return false;
             }
 
-            File::append($logFile, $delta . "\n");
+            File::append($logFile, preg_replace('/\.+(?=\r?\n|$)/', '', $delta) . "\n");
             $jobLogState[$jobId]['full'] = $normalized;
 
             return true;
         }
 
         // If the log was rotated or restarted on the remote, reprint entirely.
-        File::append($logFile, "\n{$normalized}\n");
+        File::append($logFile, "\n" . preg_replace('/\.+(?=\r?\n|$)/', '', $normalized) . "\n");
         $jobLogState[$jobId]['full'] = $normalized;
 
         return true;
@@ -495,7 +495,7 @@ class TestRunnerService
 
         $runId = (int) ($run['id'] ?? 0);
         if ($runId > 0 && $trackedRunId === null) {
-            File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Starting Playwright tests on Gitea Actions run #{$runId}.\n");
+            File::append($logFile, "\n[" . now()->format('Y-m-d H:i:s') . "] Starting Playwright tests on Gitea Actions run #{$runId}\n");
         }
         if ($runId > 0) {
             $trackedRunId = $runId;
@@ -522,7 +522,7 @@ class TestRunnerService
             if ($conclusion !== '') {
                 $completedText .= " ({$conclusion})";
             }
-            File::append($logFile, $completedText . ".\n");
+            File::append($logFile, $completedText . "\n");
 
             // Evaluate the conclusion state of the action.
             if ($conclusion === '' || in_array($conclusion, ['success', 'neutral', 'skipped'], true)) {

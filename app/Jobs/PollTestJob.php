@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Test;
 use App\Services\TestService;
+use App\Services\PipelineService;
 use Carbon\Carbon;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -74,7 +75,7 @@ class PollTestJob implements ShouldQueue
      *
      * @param TestService $testService
      */
-    public function handle(TestService $testService): void
+    public function handle(TestService $testService, PipelineService $pipelineService): void
     {
         $test = Test::query()->find($this->testId);
 
@@ -98,7 +99,7 @@ class PollTestJob implements ShouldQueue
         }
 
         // Delegate API polling and log streaming logic to the runner service
-        $result = $testService->pollPlaywrightActions(
+        $result = $pipelineService->pollPlaywrightActions(
             $this->logFile,
             $this->repoFullName,
             $this->testBranch,
