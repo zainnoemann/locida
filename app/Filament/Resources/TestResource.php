@@ -6,6 +6,7 @@ use App\Filament\Resources\TestResource\Pages\CreateTest;
 use App\Filament\Resources\TestResource\Pages\EditTest;
 use App\Filament\Resources\TestResource\Pages\GenerateTest;
 use App\Filament\Resources\TestResource\Pages\ListTests;
+use App\Filament\Resources\TestResource\Pages\ReportTest;
 use App\Filament\Resources\TestResource\Schemas\TestForm;
 use App\Filament\Resources\TestResource\Tables\TestTable;
 use App\Models\Test;
@@ -57,6 +58,7 @@ class TestResource extends Resource
             'create' => CreateTest::route('/create'),
             'edit' => EditTest::route('/{record}/edit'),
             'generate' => GenerateTest::route('/{record}/generate'),
+            'report' => ReportTest::route('/{record}/report'),
         ];
     }
 }
