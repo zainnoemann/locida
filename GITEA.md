@@ -1,28 +1,19 @@
-# LOCIDA GITEA
+# GITEA
 
 [![Gitea](https://img.shields.io/badge/Gitea-latest-609926?logo=gitea&logoColor=white)](https://about.gitea.com/)
 [![Act Runner](https://img.shields.io/badge/Act%20Runner-latest-1F6FEB)](https://docs.gitea.com/usage/actions/act-runner)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 
-Reference guide for running the bundled local Gitea + Gitea Actions runner stack used by LOCIDA.
+Reference guide for running the bundled local Gitea and Gitea Actions runner stack used by LOCIDA.
 
 This document is the companion guide for the Gitea-related setup referenced from [README.md](README.md).
-
-Quick links:
-[Quick Start](#quick-start) • [Initial Setup](#initial-setup) • [Runner Setup](#runner-setup) • [Daily Commands](#daily-commands) • [Troubleshooting](#troubleshooting)
 
 ## Table Of Contents
 
 - [Overview](#overview)
-- [Services](#services)
-- [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Initial Setup](#initial-setup)
 - [Runner Setup](#runner-setup)
-- [Environment Variables](#environment-variables)
 - [Daily Commands](#daily-commands)
-- [Port Mapping](#port-mapping)
-- [Volumes](#volumes)
 - [Troubleshooting](#troubleshooting)
 
 ## Overview
@@ -33,21 +24,7 @@ This repository ships with two Gitea-related services in `docker-compose.yml`:
 - `act-runner`: self-hosted Gitea Actions runner
 
 The runner auto-registers on first boot when `GITEA_RUNNER_REGISTRATION_TOKEN` is provided.
-The LOCIDA application uses this stack to discover repositories, fetch branches, and browse generated artifacts.
-
-## Services
-
-| Service | Image | Purpose | Host Port |
-| --- | --- | --- | --- |
-| `gitea` | `gitea/gitea:latest` | Git hosting + web UI | `3000` (HTTP), `2222` (SSH) |
-| `act-runner` | `gitea/act_runner:latest` | Executes Gitea Actions workflows | - |
-
-## Prerequisites
-
-- Docker Desktop (or Docker Engine + Docker Compose plugin)
-- Repository cloned locally
-- `GITEA_RUNNER_REGISTRATION_TOKEN` value generated from the Gitea UI
-- A Gitea user account with a personal access token (PAT) if you want LOCIDA to talk to the Gitea API
+The LOCIDA application uses this stack to discover repositories, fetch branches, and browse test execution artifacts.
 
 ## Quick Start
 
@@ -65,12 +42,14 @@ http://localhost:3000
 
 3. Complete the first-run Gitea web installation wizard.
 
-4. Create a Gitea user and a personal access token (PAT).
+4. Create a Gitea user and a personal access token.
 
 5. Put required env values in `.env`:
 
 ```dotenv
-GITEA_ROOT_URL=
+GIT_PROVIDER=gitea
+GITEA_INTERNAL_HOST=gitea:3000
+GITEA_ROOT_URL=http://localhost:3000/
 GITEA_API_URL=http://gitea:3000/api/v1
 GITEA_API_TOKEN=<your_pat>
 GITEA_RUNNER_REGISTRATION_TOKEN=<runner_registration_token>
@@ -89,16 +68,6 @@ When opening `http://localhost:3000` for the first time:
 - Keep most defaults from Gitea installer unless you have custom needs.
 - Set `ROOT_URL` to the URL you actually use. For this repository, that is usually `http://localhost:3000`.
 - After install, log in and create your first repository.
-
-Optional local clone examples:
-
-```bash
-# HTTP
-git clone http://localhost:3000/<user>/<repo>.git
-
-# SSH (mapped to host port 2222)
-git clone ssh://git@localhost:2222/<user>/<repo>.git
-```
 
 ## Runner Setup
 
@@ -123,22 +92,6 @@ Notes:
 - The runner container mounts `/var/run/docker.sock`, so Docker must be available on the host.
 - If the runner does not register, the token is usually wrong, expired, or missing from `.env`.
 
-## Environment Variables
-
-Variables used by the Laravel app and runner integration:
-
-| Variable | Description | Example |
-| --- | --- | --- |
-| `GITEA_ROOT_URL` | Canonical base URL used by Gitea for links and notifications | `http://localhost:3000` |
-| `GITEA_API_URL` | Gitea API base URL for app integration | `http://gitea:3000/api/v1` |
-| `GITEA_API_TOKEN` | Personal access token for API calls | `<PAT>` |
-| `GITEA_RUNNER_REGISTRATION_TOKEN` | Token used by `act-runner` auto-registration | `<registration_token>` |
-
-Integration notes for LOCIDA:
-
-- `GITEA_API_URL` should usually point to `http://gitea:3000/api/v1` when the app runs inside the same Compose network.
-- `GITEA_API_TOKEN` must belong to a user that can read the repositories you want to select in the Filament form.
-- `GITEA_RUNNER_REGISTRATION_TOKEN` is only needed for the runner container; the Laravel app does not use it directly.
 
 ## Daily Commands
 
@@ -146,30 +99,11 @@ Integration notes for LOCIDA:
 | --- | --- |
 | Start Gitea stack | `docker compose up -d gitea act-runner` |
 | Restart runner only | `docker compose restart act-runner` |
-| Recreate runner (re-register) | `docker compose up -d --force-recreate act-runner` |
-| View Gitea logs | `docker compose logs -f gitea` |
-| View runner logs | `docker compose logs -f act-runner` |
+| Recreate runner | `docker compose up -d --force-recreate act-runner` |
 | Stop Gitea stack | `docker compose stop gitea act-runner` |
-| Stop and remove Gitea stack | `docker compose down` |
 
 If you want to restart the full integration stack including the app, use `docker compose up -d --build` from the repository root.
 
-## Port Mapping
-
-- Gitea web UI: `http://localhost:3000`
-- Gitea SSH: `localhost:2222`
-
-## Volumes
-
-Named volumes relevant to Gitea:
-
-- `gitea_data`: persistent Gitea data (`/data` in `gitea` container)
-- `act_runner_data`: persistent runner state (`/data` in `act-runner` container)
-
-Useful artifact/log locations inside `gitea` data volume:
-
-- Actions artifacts: `/data/gitea/actions_artifacts`
-- Actions logs: `/data/gitea/actions_log/<owner>/<repo>/...`
 
 ## Troubleshooting
 
@@ -191,13 +125,13 @@ Check Gitea availability from inside runner network:
 docker compose exec act-runner sh -lc "wget -qO- http://gitea:3000 | head"
 ```
 
-Reset only Gitea + runner containers (without removing volumes):
+Reset only Gitea and runner containers without removing volumes:
 
 ```bash
 docker compose up -d --force-recreate gitea act-runner
 ```
 
-Hard reset Gitea data (destructive):
+Hard reset Gitea data, this is destructive:
 
 ```bash
 docker compose down -v
