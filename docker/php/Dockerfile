@@ -24,8 +24,6 @@ RUN set -eux; \
         libjpeg-turbo-dev; \
     docker-php-ext-configure gd --with-freetype --with-jpeg; \
     docker-php-ext-install -j"$(nproc)" intl pdo_pgsql mbstring exif pcntl bcmath gd zip; \
-    pecl install redis; \
-    docker-php-ext-enable redis; \
     apk del .build-deps; \
     rm -rf /tmp/pear
 

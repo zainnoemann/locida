@@ -14,8 +14,6 @@ services:
         depends_on:
             db:
                 condition: service_healthy
-            redis:
-                condition: service_healthy
         networks:
             - locida
         extra_hosts:
@@ -36,8 +34,6 @@ services:
             - storage_data:/var/www/html/storage
         depends_on:
             db:
-                condition: service_healthy
-            redis:
                 condition: service_healthy
         networks:
             - locida
@@ -81,23 +77,6 @@ services:
         networks:
             - locida
 
-    redis:
-        image: redis:7-alpine
-        container_name: locida-redis
-        restart: unless-stopped
-        command: ["redis-server", "--port", "16379"]
-        ports:
-            - "16379:16379"
-        healthcheck:
-            test: ["CMD", "redis-cli", "-p", "16379", "ping"]
-            interval: 5s
-            timeout: 5s
-            retries: 10
-            start_period: 5s
-        volumes:
-            - redis_data:/data
-        networks:
-            - locida
 
     gitea:
         image: gitea/gitea:latest
@@ -163,7 +142,6 @@ services:
 
 volumes:
     db_data:
-    redis_data:
     vendor_data:
     storage_data:
     gitea_data:
