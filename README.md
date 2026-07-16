@@ -5,7 +5,6 @@
 [![Playwright](https://img.shields.io/badge/Playwright-1.x-2EAD33?logo=playwright&logoColor=white)](https://playwright.dev/)
 [![Docker](https://img.shields.io/badge/Docker-29.x-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)](https://redis.io/)
 [![Verdaccio](https://img.shields.io/badge/Verdaccio-6-4B275F?logo=verdaccio&logoColor=white)](https://verdaccio.org/)
 
 LOCIDA is a Laravel application for managing Playwright test generation and reviewing the resulting reports. It is designed around a Docker-first local workflow and is paired with GitHub and Gitea integrations for repository selection, workflow execution, and artifact browsing.
@@ -127,8 +126,6 @@ The main environment values are already present in `.env.example`. The most impo
 | `SESSION_DRIVER` | Session storage backend | `database` |
 | `CACHE_STORE` | Cache storage backend | `database` |
 | `QUEUE_CONNECTION` | Queue backend for background jobs | `database` |
-| `REDIS_HOST` | Redis host inside Docker | `redis` |
-| `REDIS_PORT` | Redis port inside Docker | `16379` |
 | `GIT_PROVIDER` | Git integration to use, either `github` or `gitea` | empty |
 | `GITEA_INTERNAL_HOST` | Internal Docker hostname and port for Gitea | `gitea:3000` |
 | `GITEA_ROOT_URL` | Public Gitea base URL | `http://localhost:3000/` |
@@ -139,7 +136,7 @@ The main environment values are already present in `.env.example`. The most impo
 | `GITHUB_API_URL` | GitHub API endpoint used by the app | `https://api.github.com` |
 | `GITHUB_API_TOKEN` | Personal access token for GitHub access | empty until configured |
 
-For local app development, the important convention is that containers talk to the database and Redis by service name, not by the host-published port.
+For local app development, the important convention is that containers talk to the database by service name, not by the host-published port.
 
 ## Services
 
@@ -149,7 +146,6 @@ For local app development, the important convention is that containers talk to t
 | `queue` | `locida:latest` | Queue worker for background jobs | - |
 | `nginx` | `nginx:1.27-alpine` | HTTP server for the app | `8080` |
 | `db` | `postgres:16-alpine` | PostgreSQL database | `15432` |
-| `redis` | `redis:7-alpine` | Cache/session backend | `16379` |
 | `gitea` | `gitea/gitea:latest` | Local Git hosting and Actions UI | `3000` / `2222` |
 | `act-runner` | `gitea/act_runner:latest` | Executes Gitea Actions workflows | - |
 | `registry` | `registry:3` | Local Docker registry for caching | `5000` |
@@ -193,7 +189,6 @@ For local app development, the important convention is that containers talk to t
 | Follow queue logs | `docker compose logs -f queue` |
 | Follow nginx logs | `docker compose logs -f nginx` |
 | Follow db logs | `docker compose logs -f db` |
-| Follow redis logs | `docker compose logs -f redis` |
 | Follow Gitea logs | `docker compose logs -f gitea` |
 | Follow runner logs | `docker compose logs -f act-runner` |
 | Stop all services | `docker compose down` |
@@ -229,7 +224,7 @@ Fix storage/bootstrap permissions:
 docker compose exec app sh -c "chown -R www-data:www-data storage bootstrap/cache && chmod -R ug+rwx storage bootstrap/cache"
 ```
 
-If the app cannot reach the database or Redis from inside Docker, check that the service hostnames are still `db` and `redis`, not `localhost`.
+If the app cannot reach the database from inside Docker, check that the service hostname is still `db`, not `localhost`.
 
 If the queue worker is not running, background workflows will stay pending and Playwright reports may never appear.
 
