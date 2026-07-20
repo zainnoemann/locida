@@ -203,8 +203,8 @@ class TestLog extends Component
         $activeStageKey = null;
         $completedStageKey = null;
 
-        if (isset($stagePositions['closure'])) {
-            $completedStageKey = 'closure';
+        if (strpos($logs, '] Done') !== false || strpos($logs, "\nDone\n") !== false) {
+            $completedStageKey = 'done';
         } else {
             // Find the most recently triggered stage
             foreach (array_reverse(self::TIMELINE_STAGES) as $stage) {

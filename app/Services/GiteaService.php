@@ -58,7 +58,7 @@ class GiteaService implements \App\Contracts\GitInterface
      */
     public function httpClient(): PendingRequest
     {
-        return Http::withToken($this->apiToken)->timeout(10)->retry(2, 200);
+        return Http::withHeaders(['Authorization' => 'token ' . $this->apiToken])->timeout(10)->retry(2, 200);
     }
 
     /**

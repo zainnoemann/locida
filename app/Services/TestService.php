@@ -294,7 +294,20 @@ class TestService
     {
         $user = $this->git->getAuthenticatedUser();
 
-        $username = $user['login'] ?? $user['username'] ?? 'locida-bot';
+        $username = $user['login'] ?? $user['username'] ?? null;
+
+        // Fallback to the owner from the repository full name if available
+        if (empty($username) && $fullName) {
+            $parts = explode('/', $fullName, 2);
+            if (count($parts) === 2 && !empty($parts[0])) {
+                $username = $parts[0];
+            }
+        }
+
+        if (empty($username)) {
+            $username = 'locida-bot';
+        }
+
         $email = $user['email'] ?? '';
 
         if (empty($email)) {
