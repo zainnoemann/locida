@@ -1,6 +1,7 @@
 node_modules/
 dist/
 tests/
+reports/
 .env
 .env.backup
 .env.production
