@@ -67,10 +67,15 @@ class GenerateTest extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('back')
+                ->label('Back')
+                ->icon('heroicon-m-arrow-left')
+                ->color('gray')
+                ->url(fn (): string => static::getResource()::getUrl('index')),
             Action::make('report')
                 ->label('Report')
                 ->icon('heroicon-m-document-chart-bar')
-                ->color('gray')
+                ->color('info')
                 ->url(fn (): string => static::getResource()::getUrl('report', ['record' => $this->record]))
                 ->visible(fn (): bool => ! $this->record->isGenerating()),
             Action::make('regenerate')

@@ -4,6 +4,7 @@ namespace App\Filament\Resources\TestResource\Pages;
 
 use App\Filament\Resources\TestResource;
 use App\Models\Test;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\Page;
 
 class ReportTest extends Page
@@ -35,6 +36,17 @@ class ReportTest extends Page
             static::getResource()::getUrl() => static::getResource()::getPluralModelLabel(),
             static::getResource()::getUrl('edit', ['record' => $this->record]) => $this->record->name,
             static::getResource()::getUrl('report', ['record' => $this->record]) => 'Report',
+        ];
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('backToGenerate')
+                ->label('Back')
+                ->icon('heroicon-m-arrow-left')
+                ->color('gray')
+                ->url(fn () => static::getResource()::getUrl('generate', ['record' => $this->record])),
         ];
     }
 }

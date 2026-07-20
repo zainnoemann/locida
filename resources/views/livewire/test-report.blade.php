@@ -81,6 +81,12 @@
             </button>
             @endforeach
         </div>
+
+        {{-- Total Duration --}}
+        <div class="shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300" title="Total Duration">
+            <x-filament::icon icon="heroicon-m-clock" class="h-4 w-4 text-gray-500 dark:text-gray-400" />
+            <span class="font-bold tabular-nums">{{ $report['pipelineDuration'] ?? 0 }}s</span>
+        </div>
     </div>
 
     {{-- Spec List Container --}}

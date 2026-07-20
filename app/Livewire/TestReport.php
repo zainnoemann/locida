@@ -75,7 +75,7 @@ class TestReport extends Component
      */
     public function getReportProperty(): array
     {
-        $test = Test::query()->select(['id', 'repo_name', 'repo_url', 'test_branch'])->find($this->testId);
+        $test = Test::query()->select(['id', 'repo_name', 'repo_url', 'test_branch', 'started_at', 'generated_at', 'failed_at'])->find($this->testId);
         if ($test === null) {
             return [
                 'available' => false,
@@ -171,11 +171,18 @@ class TestReport extends Component
         $flaky = (int) ($stats['flaky'] ?? 0);
         $skipped = (int) ($stats['skipped'] ?? 0);
 
+        $pipelineDuration = 0;
+        if ($test->started_at) {
+            $end = $test->generated_at ?? $test->failed_at ?? now();
+            $pipelineDuration = $test->started_at->diffInSeconds($end);
+        }
+
         return [
             'available' => true,
             'branch' => $testBranch,
             'generatedAt' => $stats['startTime'] ?? null,
             'durationMs' => (int) ($stats['duration'] ?? 0),
+            'pipelineDuration' => $pipelineDuration,
             'htmlReportUrl' => $htmlReportUrl,
             'stats' => [
                 'expected' => $expected,
